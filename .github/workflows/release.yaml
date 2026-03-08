@@ -104,7 +104,7 @@ jobs:
             runner: windows-latest
 
           - platform: macos
-            targets: x86_64-apple-darwin aarch64-apple-darwin
+            targets: x86_64-apple-darwin,aarch64-apple-darwin
             profile: release-native
             app_suffix: .app/Contents/MacOS
             package_ext: .dmg
@@ -171,10 +171,12 @@ jobs:
       - name: Build binaries (non-Web)
         if: ${{ matrix.platform != 'web' }}
         run: |
-          for target in ${{ matrix.targets }}; do
+          for target in ${TARGETS//,/ }; do
             cargo build --locked --profile='${{ matrix.profile }}' --target="${target}" --no-default-features --features='${{ matrix.features }}'
             mv target/"${target}"/'${{ matrix.profile }}/${{ env.cargo_build_binary_name }}${{ matrix.binary_ext }}' tmp/binary/"${target}"'${{ matrix.binary_ext }}'
           done
+        env:
+          TARGETS: ${{ matrix.targets }}
 
       - name: Add binaries to app (non-Web)
         if: ${{ matrix.platform != 'web' }}
