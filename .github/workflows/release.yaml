@@ -165,6 +165,7 @@ jobs:
       - name: Install and run trunk (Web)
         if: ${{ matrix.platform == 'web' }}
         run: |
+          rustup target add wasm32-unknown-unknown
           cargo binstall --no-confirm trunk wasm-bindgen-cli wasm-opt
           trunk build --locked --release --dist '${{ env.app }}'
 
