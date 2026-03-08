@@ -3,17 +3,18 @@ name = "ludo"
 authors = ["Juan-LukeKlopper <jlklopper@protonmail.com>"]
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.92"
 
 [dependencies]
-bevy = { version = "0.14", features = ["wayland"] }
-rand = "0.8"
+bevy = { version = "0.14.2" }
+rand = "0.8.5"
 # Compile low-severity logs out of native builds for performance.
-log = { version = "0.4", features = [
+log = { version = "0.4.22", features = [
     "max_level_debug",
     "release_max_level_warn",
 ] }
 # Compile low-severity logs out of web builds for performance.
-tracing = { version = "0.1", features = [
+tracing = { version = "0.1.40", features = [
     "max_level_debug",
     "release_max_level_warn",
 ] }

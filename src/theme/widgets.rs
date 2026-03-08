@@ -7,17 +7,17 @@ use crate::theme::{interaction::InteractionPalette, palette::*};
 /// An extension trait for spawning UI widgets.
 pub trait Widgets {
     /// Spawn a simple button with text.
-    fn button(&mut self, text: impl Into<String>) -> EntityCommands;
+    fn button(&mut self, text: impl Into<String>) -> EntityCommands<'_>;
 
     /// Spawn a simple header label. Bigger than [`Widgets::label`].
-    fn header(&mut self, text: impl Into<String>) -> EntityCommands;
+    fn header(&mut self, text: impl Into<String>) -> EntityCommands<'_>;
 
     /// Spawn a simple text label.
-    fn label(&mut self, text: impl Into<String>) -> EntityCommands;
+    fn label(&mut self, text: impl Into<String>) -> EntityCommands<'_>;
 }
 
 impl<T: Spawn> Widgets for T {
-    fn button(&mut self, text: impl Into<String>) -> EntityCommands {
+    fn button(&mut self, text: impl Into<String>) -> EntityCommands<'_> {
         let mut entity = self.spawn((
             Name::new("Button"),
             ButtonBundle {
@@ -54,7 +54,7 @@ impl<T: Spawn> Widgets for T {
         entity
     }
 
-    fn header(&mut self, text: impl Into<String>) -> EntityCommands {
+    fn header(&mut self, text: impl Into<String>) -> EntityCommands<'_> {
         let mut entity = self.spawn((
             Name::new("Header"),
             NodeBundle {
@@ -85,7 +85,7 @@ impl<T: Spawn> Widgets for T {
         entity
     }
 
-    fn label(&mut self, text: impl Into<String>) -> EntityCommands {
+    fn label(&mut self, text: impl Into<String>) -> EntityCommands<'_> {
         let entity = self.spawn((
             Name::new("Label"),
             TextBundle::from_section(
@@ -109,11 +109,11 @@ impl<T: Spawn> Widgets for T {
 pub trait Containers {
     /// Spawns a root node that covers the full screen
     /// and centers its content horizontally and vertically.
-    fn ui_root(&mut self) -> EntityCommands;
+    fn ui_root(&mut self) -> EntityCommands<'_>;
 }
 
 impl Containers for Commands<'_, '_> {
-    fn ui_root(&mut self) -> EntityCommands {
+    fn ui_root(&mut self) -> EntityCommands<'_> {
         self.spawn((
             Name::new("UI Root"),
             NodeBundle {
@@ -138,17 +138,17 @@ impl Containers for Commands<'_, '_> {
 /// are able to spawn entities.
 /// Ideally, this trait should be [part of Bevy itself](https://github.com/bevyengine/bevy/issues/14231).
 trait Spawn {
-    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands;
+    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands<'_>;
 }
 
 impl Spawn for Commands<'_, '_> {
-    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands {
+    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands<'_> {
         self.spawn(bundle)
     }
 }
 
 impl Spawn for ChildBuilder<'_> {
-    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands {
+    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands<'_> {
         self.spawn(bundle)
     }
 }
