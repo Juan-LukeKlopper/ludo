@@ -519,17 +519,16 @@ fn apply_move(game: &mut LudoGame, token_index: usize, commands: &mut Commands, 
 
     let player = game.current;
     let token = game.players[player].tokens[token_index];
-    let mut landed_path: Option<u8> = None;
 
-    game.players[player].tokens[token_index] = match token {
+    let landed_path = match token {
         TokenState::Yard => {
-            landed_path = Some(0);
-            TokenState::Path(0)
+            game.players[player].tokens[token_index] = TokenState::Path(0);
+            Some(0)
         }
         TokenState::Path(path) => {
             let next = path + roll;
-            landed_path = Some(next);
-            TokenState::Path(next)
+            game.players[player].tokens[token_index] = TokenState::Path(next);
+            Some(next)
         }
     };
 
