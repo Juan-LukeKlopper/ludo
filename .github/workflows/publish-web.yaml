@@ -1,0 +1,67 @@
+name: Publish Web
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  web-build:
+    name: Build HTML/WASM bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y libasound2-dev libudev-dev
+
+      - name: Populate target directory from cache
+        uses: Leafwing-Studios/cargo-cache@v2
+        with:
+          sweep-cache: true
+
+      - name: Install trunk
+        uses: cargo-bins/cargo-binstall@v1.9.0
+
+      - name: Build web release
+        run: |
+          cargo binstall --no-confirm trunk wasm-bindgen-cli wasm-opt
+          trunk build --locked --release --dist dist
+
+      - name: Archive web bundle
+        run: |
+          cd dist
+          zip -r ../ludo-web.zip .
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ludo-web
+          path: ludo-web.zip
+          retention-days: 7
+
+      - name: Upload zip to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ludo-web.zip
+          asset_name: ludo-web.zip
+          tag: ${{ github.ref_name }}
+          release_name: ${{ github.ref_name }}
+          overwrite: true
