@@ -1,6 +1,6 @@
 //! The screen state for the main gameplay.
 
-use bevy::{input::common_conditions::input_just_pressed, prelude::*};
+use bevy::{input::common_conditions::input_just_pressed, prelude::*, window::PrimaryWindow};
 use rand::{seq::IteratorRandom, Rng};
 
 use crate::{
@@ -12,9 +12,11 @@ use crate::{
 const PLAYER_COLORS: [Color; 4] = [
     Color::srgb(0.95, 0.25, 0.25),
     Color::srgb(0.2, 0.8, 0.35),
-    Color::srgb(0.2, 0.45, 0.95),
     Color::srgb(0.98, 0.85, 0.2),
+    Color::srgb(0.2, 0.45, 0.95),
 ];
+const BOARD_WORLD_SIZE: f32 = 860.0;
+const CELL_SIZE: f32 = 36.0;
 const START_INDICES: [u8; 4] = [0, 13, 26, 39];
 const PLAYER_NAMES: [&str; 12] = [
     "Alex", "Sam", "Jordan", "Taylor", "Morgan", "Riley", "Casey", "Sky", "Avery", "Kai", "Nova",
@@ -39,7 +41,9 @@ pub(super) fn plugin(app: &mut App) {
             run_bot_turn,
             sync_token_targets,
             animate_token_transforms,
+            fit_gameplay_board_to_window,
             update_status_text,
+            update_dice_text,
             move_to_win_screen,
             return_to_title_screen
                 .run_if(input_just_pressed(KeyCode::Escape))
@@ -149,7 +153,13 @@ struct TokenVisual {
 }
 
 #[derive(Component)]
+struct GameplayBoard;
+
+#[derive(Component)]
 struct StatusText;
+
+#[derive(Component)]
+struct DiceText;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PlayerKind {
@@ -256,6 +266,7 @@ fn spawn_board(mut commands: Commands) {
         .spawn((
             Name::new("GameplayRoot"),
             StateScoped(Screen::Gameplay),
+            GameplayBoard,
             Transform::default(),
             GlobalTransform::default(),
         ))
@@ -263,12 +274,71 @@ fn spawn_board(mut commands: Commands) {
             parent.spawn(SpriteBundle {
                 sprite: Sprite {
                     color: Color::srgb(0.08, 0.08, 0.12),
-                    custom_size: Some(Vec2::new(860.0, 860.0)),
+                    custom_size: Some(Vec2::splat(BOARD_WORLD_SIZE)),
                     ..default()
                 },
                 transform: Transform::from_xyz(0.0, 0.0, -20.0),
                 ..default()
             });
+
+            for (player, c) in PLAYER_COLORS.iter().enumerate() {
+                parent.spawn(SpriteBundle {
+                    sprite: Sprite {
+                        color: c.with_alpha(0.17),
+                        custom_size: Some(Vec2::new(300.0, 300.0)),
+                        ..default()
+                    },
+                    transform: Transform::from_translation(yard_base(player).extend(-5.0)),
+                    ..default()
+                });
+            }
+
+            parent.spawn(SpriteBundle {
+                sprite: Sprite {
+                    color: Color::srgb(0.06, 0.06, 0.11),
+                    custom_size: Some(Vec2::new(220.0, 560.0)),
+                    ..default()
+                },
+                transform: Transform::from_xyz(0.0, 0.0, -8.0),
+                ..default()
+            });
+            parent.spawn(SpriteBundle {
+                sprite: Sprite {
+                    color: Color::srgb(0.06, 0.06, 0.11),
+                    custom_size: Some(Vec2::new(560.0, 220.0)),
+                    ..default()
+                },
+                transform: Transform::from_xyz(0.0, 0.0, -8.0),
+                ..default()
+            });
+
+            for p in track_points() {
+                parent.spawn(SpriteBundle {
+                    sprite: Sprite {
+                        color: Color::srgb(0.2, 0.2, 0.24),
+                        custom_size: Some(Vec2::splat(26.0)),
+                        ..default()
+                    },
+                    transform: Transform::from_translation(p),
+                    ..default()
+                });
+            }
+
+            for player in 0..4 {
+                for step in 0..6 {
+                    parent.spawn(SpriteBundle {
+                        sprite: Sprite {
+                            color: PLAYER_COLORS[player].with_alpha(0.34),
+                            custom_size: Some(Vec2::splat(24.0)),
+                            ..default()
+                        },
+                        transform: Transform::from_translation(
+                            home_position(player, 50 + step) - Vec3::new(0.0, 0.0, 1.0),
+                        ),
+                        ..default()
+                    });
+                }
+            }
 
             parent.spawn((
                 Text2dBundle {
@@ -286,29 +356,21 @@ fn spawn_board(mut commands: Commands) {
                 StatusText,
             ));
 
-            for (player, c) in PLAYER_COLORS.iter().enumerate() {
-                parent.spawn(SpriteBundle {
-                    sprite: Sprite {
-                        color: c.with_alpha(0.17),
-                        custom_size: Some(Vec2::new(300.0, 300.0)),
-                        ..default()
-                    },
-                    transform: Transform::from_translation(yard_base(player).extend(-5.0)),
+            parent.spawn((
+                Text2dBundle {
+                    text: Text::from_section(
+                        "🎲 -",
+                        TextStyle {
+                            font_size: 40.0,
+                            color: Color::WHITE,
+                            ..default()
+                        },
+                    ),
+                    transform: Transform::from_xyz(300.0, 300.0, 12.0),
                     ..default()
-                });
-            }
-
-            for p in track_points() {
-                parent.spawn(SpriteBundle {
-                    sprite: Sprite {
-                        color: Color::srgb(0.2, 0.2, 0.24),
-                        custom_size: Some(Vec2::splat(27.0)),
-                        ..default()
-                    },
-                    transform: Transform::from_translation(p),
-                    ..default()
-                });
-            }
+                },
+                DiceText,
+            ));
 
             for (player, color) in PLAYER_COLORS.into_iter().enumerate() {
                 for token in 0..4 {
@@ -332,6 +394,19 @@ fn spawn_board(mut commands: Commands) {
                 }
             }
         });
+}
+
+fn fit_gameplay_board_to_window(
+    window_q: Query<&Window, With<PrimaryWindow>>,
+    mut board_q: Query<&mut Transform, With<GameplayBoard>>,
+) {
+    let Ok(window) = window_q.get_single() else {
+        return;
+    };
+    let target = (window.width().min(window.height()) * 0.92 / BOARD_WORLD_SIZE).clamp(0.55, 2.2);
+    for mut transform in &mut board_q {
+        transform.scale = Vec3::splat(target);
+    }
 }
 
 fn handle_roll_input(
@@ -624,6 +699,7 @@ fn sync_token_targets(game: Res<LudoGame>, mut query: Query<&mut TokenVisual>) {
         return;
     }
 
+    let points = track_points();
     for mut token_visual in &mut query {
         let player = token_visual.player;
         let token = token_visual.token;
@@ -632,13 +708,12 @@ fn sync_token_targets(game: Res<LudoGame>, mut query: Query<&mut TokenVisual>) {
             TokenState::Yard => yard_position(player, token),
             TokenState::Path(path) if path <= 50 => {
                 let track = absolute_track_index(player, path);
-                track_points()[track as usize] + Vec3::new((token as f32 - 1.5) * 4.0, 0.0, 2.0)
+                points[track as usize] + Vec3::new((token as f32 - 1.5) * 4.0, 0.0, 2.0)
             }
             TokenState::Path(path) => home_position(player, path),
         };
     }
 }
-
 fn animate_token_transforms(time: Res<Time>, mut query: Query<(&TokenVisual, &mut Transform)>) {
     let speed = (time.delta_seconds() * 9.0).clamp(0.0, 1.0);
     for (token, mut transform) in &mut query {
@@ -688,6 +763,18 @@ fn update_status_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With
         game.last_roll.map(|x| x.to_string()).unwrap_or_else(|| "-".into()),
         ranking
     );
+}
+
+fn update_dice_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With<DiceText>>) {
+    let Ok(mut text) = text_query.get_single_mut() else {
+        return;
+    };
+
+    let face = game
+        .last_roll
+        .map(|roll| roll.to_string())
+        .unwrap_or_else(|| "-".into());
+    text.sections[0].value = format!("🎲 {}", face);
 }
 
 fn game_over(game: &LudoGame) -> bool {
@@ -802,30 +889,87 @@ fn hits_player(game: &LudoGame, player: usize, path: u8, target_player: usize) -
         .any(|t| matches!(t, TokenState::Path(p) if *p<=50 && absolute_track_index(target_player,*p)==target))
 }
 
+fn board_coord(col: i32, row: i32) -> Vec3 {
+    let x = (col as f32 - 7.0) * CELL_SIZE;
+    let y = (7.0 - row as f32) * CELL_SIZE;
+    Vec3::new(x, y, 0.0)
+}
+
 fn track_points() -> Vec<Vec3> {
-    (0..52)
-        .map(|i| {
-            let angle = (i as f32 / 52.0) * std::f32::consts::TAU;
-            Vec3::new(angle.cos() * 280.0, angle.sin() * 280.0, 0.0)
-        })
-        .collect()
+    [
+        (1, 6),
+        (2, 6),
+        (3, 6),
+        (4, 6),
+        (5, 6),
+        (6, 5),
+        (6, 4),
+        (6, 3),
+        (6, 2),
+        (6, 1),
+        (6, 0),
+        (7, 0),
+        (8, 0),
+        (8, 1),
+        (8, 2),
+        (8, 3),
+        (8, 4),
+        (8, 5),
+        (9, 6),
+        (10, 6),
+        (11, 6),
+        (12, 6),
+        (13, 6),
+        (14, 6),
+        (14, 7),
+        (14, 8),
+        (13, 8),
+        (12, 8),
+        (11, 8),
+        (10, 8),
+        (9, 8),
+        (8, 9),
+        (8, 10),
+        (8, 11),
+        (8, 12),
+        (8, 13),
+        (8, 14),
+        (7, 14),
+        (6, 14),
+        (6, 13),
+        (6, 12),
+        (6, 11),
+        (6, 10),
+        (6, 9),
+        (5, 8),
+        (4, 8),
+        (3, 8),
+        (2, 8),
+        (1, 8),
+        (0, 8),
+        (0, 7),
+        (0, 6),
+    ]
+    .into_iter()
+    .map(|(col, row)| board_coord(col, row))
+    .collect()
 }
 
 fn yard_base(player: usize) -> Vec2 {
     [
-        Vec2::new(-260.0, -220.0),
-        Vec2::new(260.0, -220.0),
-        Vec2::new(260.0, 220.0),
-        Vec2::new(-260.0, 220.0),
+        Vec2::new(-220.0, 220.0),
+        Vec2::new(220.0, 220.0),
+        Vec2::new(220.0, -220.0),
+        Vec2::new(-220.0, -220.0),
     ][player]
 }
 
 fn yard_position(player: usize, token: usize) -> Vec3 {
     let offsets = [
-        Vec2::new(-30.0, -30.0),
-        Vec2::new(30.0, -30.0),
-        Vec2::new(-30.0, 30.0),
-        Vec2::new(30.0, 30.0),
+        Vec2::new(-42.0, -42.0),
+        Vec2::new(42.0, -42.0),
+        Vec2::new(-42.0, 42.0),
+        Vec2::new(42.0, 42.0),
     ];
     (yard_base(player) + offsets[token]).extend(3.0)
 }
@@ -834,12 +978,13 @@ fn home_position(player: usize, path: u8) -> Vec3 {
     if path >= 56 {
         return Vec3::new(0.0, 0.0, 2.0);
     }
-    let step = (path - 50) as f32;
+
+    let step = (path - 50) as i32;
     match player {
-        0 => Vec3::new(-200.0 + step * 40.0, 0.0, 2.0),
-        1 => Vec3::new(0.0, -200.0 + step * 40.0, 2.0),
-        2 => Vec3::new(200.0 - step * 40.0, 0.0, 2.0),
-        _ => Vec3::new(0.0, 200.0 - step * 40.0, 2.0),
+        0 => board_coord(1 + step, 7) + Vec3::new(0.0, 0.0, 2.0),
+        1 => board_coord(7, 1 + step) + Vec3::new(0.0, 0.0, 2.0),
+        2 => board_coord(13 - step, 7) + Vec3::new(0.0, 0.0, 2.0),
+        _ => board_coord(7, 13 - step) + Vec3::new(0.0, 0.0, 2.0),
     }
 }
 

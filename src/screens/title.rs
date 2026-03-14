@@ -14,24 +14,50 @@ use crate::{
 struct SeatSummary(usize);
 
 #[derive(Component)]
+struct SeatPanel(usize);
+
+#[derive(Component)]
+struct SeatPageLabel;
+
+#[derive(Component)]
 struct ActionButton(SeatAction);
+
+#[derive(Resource, Default)]
+struct SeatPage {
+    index: usize,
+}
 
 #[derive(Clone, Copy)]
 enum SeatAction {
     ToggleHuman(usize),
     CycleName(usize),
     CycleBot(usize),
+    PrevSeatPage,
+    NextSeatPage,
     RandomizeBots,
     Start,
     Credits,
 }
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(Screen::Title), spawn_title_screen);
+    app.init_resource::<SeatPage>();
+    app.add_systems(
+        OnEnter(Screen::Title),
+        (reset_seat_page, spawn_title_screen),
+    );
     app.add_systems(
         Update,
-        (refresh_seat_summaries, handle_action_buttons).run_if(in_state(Screen::Title)),
+        (
+            refresh_seat_summaries,
+            refresh_seat_page_ui,
+            handle_action_buttons,
+        )
+            .run_if(in_state(Screen::Title)),
     );
+}
+
+fn reset_seat_page(mut seat_page: ResMut<SeatPage>) {
+    seat_page.index = 0;
 }
 
 fn spawn_title_screen(mut commands: Commands) {
@@ -71,6 +97,33 @@ fn spawn_title_screen(mut commands: Commands) {
                             ..default()
                         },
                     ));
+                    panel.spawn((
+                        TextBundle::from_section(
+                            "",
+                            TextStyle {
+                                font_size: 16.0,
+                                color: LABEL_TEXT,
+                                ..default()
+                            },
+                        ),
+                        SeatPageLabel,
+                    ));
+
+                    panel
+                        .spawn(NodeBundle {
+                            style: Style {
+                                width: Percent(100.0),
+                                flex_wrap: FlexWrap::Wrap,
+                                column_gap: Px(8.0),
+                                row_gap: Px(8.0),
+                                ..default()
+                            },
+                            ..default()
+                        })
+                        .with_children(|row| {
+                            action_btn(row, "Previous Seats", SeatAction::PrevSeatPage);
+                            action_btn(row, "Next Seats", SeatAction::NextSeatPage);
+                        });
 
                     panel
                         .spawn(NodeBundle {
@@ -86,21 +139,24 @@ fn spawn_title_screen(mut commands: Commands) {
                         .with_children(|seat_grid| {
                             for seat in 0..4 {
                                 seat_grid
-                                    .spawn(NodeBundle {
-                                        style: Style {
-                                            flex_grow: 1.0,
-                                            width: Percent(48.0),
-                                            min_width: Px(320.0),
-                                            flex_direction: FlexDirection::Column,
-                                            padding: UiRect::all(Px(10.0)),
-                                            row_gap: Px(8.0),
+                                    .spawn((
+                                        NodeBundle {
+                                            style: Style {
+                                                flex_grow: 1.0,
+                                                width: Percent(48.0),
+                                                min_width: Px(320.0),
+                                                flex_direction: FlexDirection::Column,
+                                                padding: UiRect::all(Px(10.0)),
+                                                row_gap: Px(8.0),
+                                                ..default()
+                                            },
+                                            background_color: BackgroundColor(Color::srgba(
+                                                0.16, 0.2, 0.4, 0.75,
+                                            )),
                                             ..default()
                                         },
-                                        background_color: BackgroundColor(Color::srgba(
-                                            0.16, 0.2, 0.4, 0.75,
-                                        )),
-                                        ..default()
-                                    })
+                                        SeatPanel(seat),
+                                    ))
                                     .with_children(|seat_panel| {
                                         seat_panel.spawn((
                                             TextBundle::from_section(
@@ -180,7 +236,7 @@ fn action_btn(parent: &mut ChildBuilder, text: impl Into<String>, action: SeatAc
                 style: Style {
                     flex_grow: 1.0,
                     min_width: Px(190.0),
-                    min_height: Px(40.0),
+                    min_height: Px(34.0),
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
                     padding: UiRect::all(Px(8.0)),
@@ -200,7 +256,7 @@ fn action_btn(parent: &mut ChildBuilder, text: impl Into<String>, action: SeatAc
             children.spawn(TextBundle::from_section(
                 text,
                 TextStyle {
-                    font_size: 16.0,
+                    font_size: 14.0,
                     color: BUTTON_TEXT,
                     ..default()
                 },
@@ -221,9 +277,31 @@ fn refresh_seat_summaries(setup: Res<MatchSetup>, mut labels: Query<(&SeatSummar
     }
 }
 
+fn refresh_seat_page_ui(
+    seat_page: Res<SeatPage>,
+    mut page_label: Query<&mut Text, With<SeatPageLabel>>,
+    mut seat_panels: Query<(&SeatPanel, &mut Visibility)>,
+) {
+    let start = seat_page.index * 2;
+    let end = (start + 2).min(4);
+
+    for mut text in &mut page_label {
+        text.sections[0].value = format!("Showing seats {}-{}", start + 1, end);
+    }
+
+    for (seat_panel, mut visibility) in &mut seat_panels {
+        *visibility = if (start..end).contains(&seat_panel.0) {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+    }
+}
+
 fn handle_action_buttons(
     mut interaction_q: Query<(&ActionButton, &Interaction), (With<Button>, Changed<Interaction>)>,
     mut setup: ResMut<MatchSetup>,
+    mut seat_page: ResMut<SeatPage>,
     mut next_screen: ResMut<NextState<Screen>>,
 ) {
     for (button, interaction) in &mut interaction_q {
@@ -250,6 +328,12 @@ fn handle_action_buttons(
                     .position(|s| *s == current)
                     .unwrap_or(0);
                 setup.seats[i].bot_strategy = BotStrategy::ALL[(idx + 1) % BotStrategy::ALL.len()];
+            }
+            SeatAction::PrevSeatPage => {
+                seat_page.index = seat_page.index.saturating_sub(1);
+            }
+            SeatAction::NextSeatPage => {
+                seat_page.index = (seat_page.index + 1).min(1);
             }
             SeatAction::RandomizeBots => {
                 for seat in &mut setup.seats {
