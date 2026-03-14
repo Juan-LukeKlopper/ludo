@@ -42,84 +42,117 @@ fn spawn_title_screen(mut commands: Commands) {
             children
                 .spawn(NodeBundle {
                     style: Style {
-                        width: Percent(94.0),
-                        max_width: Px(900.0),
-                        max_height: Percent(95.0),
-                        padding: UiRect::all(Px(16.0)),
+                        width: Percent(96.0),
+                        max_width: Px(1100.0),
+                        max_height: Percent(92.0),
+                        padding: UiRect::all(Px(18.0)),
                         flex_direction: FlexDirection::Column,
-                        row_gap: Px(10.0),
-                        overflow: Overflow::clip_y(),
+                        row_gap: Px(12.0),
+                        overflow: Overflow::scroll_y(),
                         ..default()
                     },
-                    background_color: BackgroundColor(Color::srgba(0.08, 0.1, 0.16, 0.9)),
+                    background_color: BackgroundColor(Color::srgba(0.04, 0.06, 0.11, 0.92)),
                     ..default()
                 })
                 .with_children(|panel| {
-                    panel.header("🎲 Ludo King V1");
-                    panel.label("Set up each seat and launch the game.");
-
-                    for seat in 0..4 {
-                        panel
-                            .spawn(NodeBundle {
-                                style: Style {
-                                    width: Percent(100.0),
-                                    flex_direction: FlexDirection::Column,
-                                    padding: UiRect::all(Px(10.0)),
-                                    row_gap: Px(8.0),
-                                    ..default()
-                                },
-                                background_color: BackgroundColor(Color::srgba(
-                                    0.2, 0.3, 0.55, 0.45,
-                                )),
-                                ..default()
-                            })
-                            .with_children(|seat_panel| {
-                                seat_panel.spawn((
-                                    TextBundle::from_section(
-                                        "",
-                                        TextStyle {
-                                            font_size: 22.0,
-                                            color: Color::WHITE,
-                                            ..default()
-                                        },
-                                    ),
-                                    SeatSummary(seat),
-                                ));
-
-                                seat_panel
-                                    .spawn(NodeBundle {
-                                        style: Style {
-                                            width: Percent(100.0),
-                                            column_gap: Px(8.0),
-                                            ..default()
-                                        },
-                                        ..default()
-                                    })
-                                    .with_children(|row| {
-                                        action_btn(
-                                            row,
-                                            format!("Seat {}: Human/Bot", seat + 1),
-                                            SeatAction::ToggleHuman(seat),
-                                        );
-                                        action_btn(
-                                            row,
-                                            format!("Seat {}: Change Name", seat + 1),
-                                            SeatAction::CycleName(seat),
-                                        );
-                                        action_btn(
-                                            row,
-                                            format!("Seat {}: Bot Strategy", seat + 1),
-                                            SeatAction::CycleBot(seat),
-                                        );
-                                    });
-                            });
-                    }
+                    panel.spawn(TextBundle::from_section(
+                        "🎲 Ludo King V1",
+                        TextStyle {
+                            font_size: 34.0,
+                            color: HEADER_TEXT,
+                            ..default()
+                        },
+                    ));
+                    panel.spawn(TextBundle::from_section(
+                        "Build your lobby, then hit Start Game.",
+                        TextStyle {
+                            font_size: 18.0,
+                            color: LABEL_TEXT,
+                            ..default()
+                        },
+                    ));
 
                     panel
                         .spawn(NodeBundle {
                             style: Style {
                                 width: Percent(100.0),
+                                flex_wrap: FlexWrap::Wrap,
+                                column_gap: Px(10.0),
+                                row_gap: Px(10.0),
+                                ..default()
+                            },
+                            ..default()
+                        })
+                        .with_children(|seat_grid| {
+                            for seat in 0..4 {
+                                seat_grid
+                                    .spawn(NodeBundle {
+                                        style: Style {
+                                            flex_grow: 1.0,
+                                            width: Percent(48.0),
+                                            min_width: Px(320.0),
+                                            flex_direction: FlexDirection::Column,
+                                            padding: UiRect::all(Px(10.0)),
+                                            row_gap: Px(8.0),
+                                            ..default()
+                                        },
+                                        background_color: BackgroundColor(Color::srgba(
+                                            0.16, 0.2, 0.4, 0.75,
+                                        )),
+                                        ..default()
+                                    })
+                                    .with_children(|seat_panel| {
+                                        seat_panel.spawn((
+                                            TextBundle::from_section(
+                                                "",
+                                                TextStyle {
+                                                    font_size: 20.0,
+                                                    color: Color::WHITE,
+                                                    ..default()
+                                                },
+                                            ),
+                                            SeatSummary(seat),
+                                        ));
+
+                                        seat_panel
+                                            .spawn(NodeBundle {
+                                                style: Style {
+                                                    width: Percent(100.0),
+                                                    flex_wrap: FlexWrap::Wrap,
+                                                    row_gap: Px(8.0),
+                                                    column_gap: Px(8.0),
+                                                    ..default()
+                                                },
+                                                ..default()
+                                            })
+                                            .with_children(|row| {
+                                                action_btn(
+                                                    row,
+                                                    format!("Seat {}: Human/Bot", seat + 1),
+                                                    SeatAction::ToggleHuman(seat),
+                                                );
+                                                action_btn(
+                                                    row,
+                                                    format!("Seat {}: Change Name", seat + 1),
+                                                    SeatAction::CycleName(seat),
+                                                );
+                                                action_btn(
+                                                    row,
+                                                    format!("Seat {}: Bot Strategy", seat + 1),
+                                                    SeatAction::CycleBot(seat),
+                                                );
+                                            });
+                                    });
+                            }
+                        });
+
+                    panel
+                        .spawn(NodeBundle {
+                            style: Style {
+                                width: Percent(100.0),
+                                flex_wrap: FlexWrap::Wrap,
                                 column_gap: Px(8.0),
+                                row_gap: Px(8.0),
                                 ..default()
                             },
                             ..default()
@@ -146,11 +179,11 @@ fn action_btn(parent: &mut ChildBuilder, text: impl Into<String>, action: SeatAc
             ButtonBundle {
                 style: Style {
                     flex_grow: 1.0,
-                    min_width: Px(0.0),
-                    height: Px(44.0),
+                    min_width: Px(190.0),
+                    min_height: Px(40.0),
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
-                    padding: UiRect::horizontal(Px(8.0)),
+                    padding: UiRect::all(Px(8.0)),
                     ..default()
                 },
                 background_color: BackgroundColor(NODE_BACKGROUND),
@@ -167,7 +200,7 @@ fn action_btn(parent: &mut ChildBuilder, text: impl Into<String>, action: SeatAc
             children.spawn(TextBundle::from_section(
                 text,
                 TextStyle {
-                    font_size: 20.0,
+                    font_size: 16.0,
                     color: BUTTON_TEXT,
                     ..default()
                 },
