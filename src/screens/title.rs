@@ -48,7 +48,7 @@ fn spawn_title_screen(mut commands: Commands) {
                         padding: UiRect::all(Px(18.0)),
                         flex_direction: FlexDirection::Column,
                         row_gap: Px(12.0),
-                        overflow: Overflow::scroll_y(),
+                        overflow: Overflow::clip_y(),
                         ..default()
                     },
                     background_color: BackgroundColor(Color::srgba(0.04, 0.06, 0.11, 0.92)),
