@@ -7,7 +7,7 @@ use crate::{
         gameplay::{random_name, BotStrategy, MatchSetup},
         Screen,
     },
-    theme::prelude::*,
+    theme::{palette::*, prelude::*},
 };
 
 #[derive(Component)]
