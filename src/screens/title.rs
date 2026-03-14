@@ -1,6 +1,6 @@
 //! The title screen that appears when the game starts.
 
-use bevy::prelude::*;
+use bevy::{prelude::*, ui::Val::*};
 
 use crate::{
     screens::{
@@ -39,53 +39,140 @@ fn spawn_title_screen(mut commands: Commands) {
         .ui_root()
         .insert(StateScoped(Screen::Title))
         .with_children(|children| {
-            children.header("🎲 Ludo King V1");
-            children.label("Customize players, names, bot personalities and start the match.");
+            children
+                .spawn(NodeBundle {
+                    style: Style {
+                        width: Percent(94.0),
+                        max_width: Px(900.0),
+                        max_height: Percent(95.0),
+                        padding: UiRect::all(Px(16.0)),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: Px(10.0),
+                        overflow: Overflow::clip_y(),
+                        ..default()
+                    },
+                    background_color: BackgroundColor(Color::srgba(0.08, 0.1, 0.16, 0.9)),
+                    ..default()
+                })
+                .with_children(|panel| {
+                    panel.header("🎲 Ludo King V1");
+                    panel.label("Set up each seat and launch the game.");
 
-            for seat in 0..4 {
-                children.spawn((
-                    TextBundle::from_section(
-                        "",
-                        TextStyle {
-                            font_size: 22.0,
-                            color: Color::WHITE,
+                    for seat in 0..4 {
+                        panel
+                            .spawn(NodeBundle {
+                                style: Style {
+                                    width: Percent(100.0),
+                                    flex_direction: FlexDirection::Column,
+                                    padding: UiRect::all(Px(10.0)),
+                                    row_gap: Px(8.0),
+                                    ..default()
+                                },
+                                background_color: BackgroundColor(Color::srgba(
+                                    0.2, 0.3, 0.55, 0.45,
+                                )),
+                                ..default()
+                            })
+                            .with_children(|seat_panel| {
+                                seat_panel.spawn((
+                                    TextBundle::from_section(
+                                        "",
+                                        TextStyle {
+                                            font_size: 22.0,
+                                            color: Color::WHITE,
+                                            ..default()
+                                        },
+                                    ),
+                                    SeatSummary(seat),
+                                ));
+
+                                seat_panel
+                                    .spawn(NodeBundle {
+                                        style: Style {
+                                            width: Percent(100.0),
+                                            column_gap: Px(8.0),
+                                            ..default()
+                                        },
+                                        ..default()
+                                    })
+                                    .with_children(|row| {
+                                        action_btn(
+                                            row,
+                                            format!("Seat {}: Human/Bot", seat + 1),
+                                            SeatAction::ToggleHuman(seat),
+                                        );
+                                        action_btn(
+                                            row,
+                                            format!("Seat {}: Change Name", seat + 1),
+                                            SeatAction::CycleName(seat),
+                                        );
+                                        action_btn(
+                                            row,
+                                            format!("Seat {}: Bot Strategy", seat + 1),
+                                            SeatAction::CycleBot(seat),
+                                        );
+                                    });
+                            });
+                    }
+
+                    panel
+                        .spawn(NodeBundle {
+                            style: Style {
+                                width: Percent(100.0),
+                                column_gap: Px(8.0),
+                                ..default()
+                            },
                             ..default()
-                        },
-                    ),
-                    SeatSummary(seat),
-                ));
-                action_btn(
-                    children,
-                    format!("Seat {}: Human/Bot", seat + 1),
-                    SeatAction::ToggleHuman(seat),
-                );
-                action_btn(
-                    children,
-                    format!("Seat {}: Change Name", seat + 1),
-                    SeatAction::CycleName(seat),
-                );
-                action_btn(
-                    children,
-                    format!("Seat {}: Bot Strategy", seat + 1),
-                    SeatAction::CycleBot(seat),
-                );
-            }
+                        })
+                        .with_children(|row| {
+                            action_btn(
+                                row,
+                                "Randomize bot names/strategies",
+                                SeatAction::RandomizeBots,
+                            );
+                            action_btn(row, "Start Game", SeatAction::Start);
+                            action_btn(row, "Credits", SeatAction::Credits);
 
-            action_btn(
-                children,
-                "Randomize bot names/strategies",
-                SeatAction::RandomizeBots,
-            );
-            action_btn(children, "Start Game", SeatAction::Start);
-            action_btn(children, "Credits", SeatAction::Credits);
-
-            #[cfg(not(target_family = "wasm"))]
-            children.button("Exit").observe(exit_app);
+                            #[cfg(not(target_family = "wasm"))]
+                            row.button("Exit").observe(exit_app);
+                        });
+                });
         });
 }
 
 fn action_btn(parent: &mut ChildBuilder, text: impl Into<String>, action: SeatAction) {
-    parent.button(text).insert(ActionButton(action));
+    parent
+        .spawn((
+            ButtonBundle {
+                style: Style {
+                    flex_grow: 1.0,
+                    min_width: Px(0.0),
+                    height: Px(44.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    padding: UiRect::horizontal(Px(8.0)),
+                    ..default()
+                },
+                background_color: BackgroundColor(NODE_BACKGROUND),
+                ..default()
+            },
+            InteractionPalette {
+                none: NODE_BACKGROUND,
+                hovered: BUTTON_HOVERED_BACKGROUND,
+                pressed: BUTTON_PRESSED_BACKGROUND,
+            },
+            ActionButton(action),
+        ))
+        .with_children(|children| {
+            children.spawn(TextBundle::from_section(
+                text,
+                TextStyle {
+                    font_size: 20.0,
+                    color: BUTTON_TEXT,
+                    ..default()
+                },
+            ));
+        });
 }
 
 fn refresh_seat_summaries(setup: Res<MatchSetup>, mut labels: Query<(&SeatSummary, &mut Text)>) {
