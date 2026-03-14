@@ -324,11 +324,11 @@ fn spawn_board(mut commands: Commands) {
                 });
             }
 
-            for player in 0..4 {
+            for (player, player_color) in PLAYER_COLORS.iter().enumerate() {
                 for step in 0..6 {
                     parent.spawn(SpriteBundle {
                         sprite: Sprite {
-                            color: PLAYER_COLORS[player].with_alpha(0.34),
+                            color: player_color.with_alpha(0.34),
                             custom_size: Some(Vec2::splat(24.0)),
                             ..default()
                         },
