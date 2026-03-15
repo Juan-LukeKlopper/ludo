@@ -24,7 +24,6 @@ const CELL_SIZE: f32 = 36.0;
 const START_INDICES: [u8; 4] = [0, 13, 26, 39];
 const SAFE_OFFSET: u8 = 8;
 const TOKEN_PICK_RADIUS: f32 = 30.0;
-const DICE_PICK_RADIUS: f32 = 72.0;
 const PLAYER_NAMES: [&str; 12] = [
     "Alex", "Sam", "Jordan", "Taylor", "Morgan", "Riley", "Casey", "Sky", "Avery", "Kai", "Nova",
     "Jules",
@@ -63,6 +62,59 @@ pub(super) fn plugin(app: &mut App) {
         )
             .run_if(in_state(Screen::Gameplay)),
     );
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum StageTheme {
+    Midnight,
+    Ocean,
+    Festival,
+}
+
+impl StageTheme {
+    pub const ALL: [StageTheme; 3] = [
+        StageTheme::Midnight,
+        StageTheme::Ocean,
+        StageTheme::Festival,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            StageTheme::Midnight => "Midnight",
+            StageTheme::Ocean => "Ocean",
+            StageTheme::Festival => "Festival",
+        }
+    }
+}
+
+struct StagePalette {
+    board_bg: Color,
+    cross_bg: Color,
+    track_cell: Color,
+    safe_cell: Color,
+}
+
+fn stage_palette(theme: StageTheme) -> StagePalette {
+    match theme {
+        StageTheme::Midnight => StagePalette {
+            board_bg: Color::srgb(0.08, 0.08, 0.12),
+            cross_bg: Color::srgb(0.06, 0.06, 0.11),
+            track_cell: Color::srgb(0.2, 0.2, 0.24),
+            safe_cell: Color::srgb(0.95, 0.95, 0.58),
+        },
+        StageTheme::Ocean => StagePalette {
+            board_bg: Color::srgb(0.06, 0.17, 0.26),
+            cross_bg: Color::srgb(0.07, 0.21, 0.31),
+            track_cell: Color::srgb(0.32, 0.57, 0.65),
+            safe_cell: Color::srgb(0.8, 0.95, 1.0),
+        },
+        StageTheme::Festival => StagePalette {
+            board_bg: Color::srgb(0.16, 0.07, 0.19),
+            cross_bg: Color::srgb(0.2, 0.09, 0.24),
+            track_cell: Color::srgb(0.45, 0.23, 0.49),
+            safe_cell: Color::srgb(0.98, 0.82, 0.38),
+        },
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -114,6 +166,7 @@ impl BotStrategy {
 #[derive(Resource, Clone)]
 pub struct MatchSetup {
     pub seats: [SeatSetup; 4],
+    pub stage_theme: StageTheme,
 }
 
 #[derive(Clone)]
@@ -148,6 +201,7 @@ impl Default for MatchSetup {
                     bot_strategy: BotStrategy::Random,
                 },
             ],
+            stage_theme: StageTheme::Midnight,
         }
     }
 }
@@ -314,10 +368,13 @@ fn setup_match(mut commands: Commands, setup: Res<MatchSetup>) {
 
 fn spawn_board(
     mut commands: Commands,
+    setup: Res<MatchSetup>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     let token_mesh = meshes.add(Circle::new(1.0));
+    let palette = stage_palette(setup.stage_theme);
+    let dice_anchor = Vec3::new(0.0, 265.0, 40.0);
     commands
         .spawn((
             Name::new("GameplayRoot"),
@@ -329,7 +386,7 @@ fn spawn_board(
         .with_children(|parent| {
             parent.spawn(SpriteBundle {
                 sprite: Sprite {
-                    color: Color::srgb(0.08, 0.08, 0.12),
+                    color: palette.board_bg,
                     custom_size: Some(Vec2::splat(BOARD_WORLD_SIZE)),
                     ..default()
                 },
@@ -351,7 +408,7 @@ fn spawn_board(
 
             parent.spawn(SpriteBundle {
                 sprite: Sprite {
-                    color: Color::srgb(0.06, 0.06, 0.11),
+                    color: palette.cross_bg,
                     custom_size: Some(Vec2::new(220.0, 560.0)),
                     ..default()
                 },
@@ -360,7 +417,7 @@ fn spawn_board(
             });
             parent.spawn(SpriteBundle {
                 sprite: Sprite {
-                    color: Color::srgb(0.06, 0.06, 0.11),
+                    color: palette.cross_bg,
                     custom_size: Some(Vec2::new(560.0, 220.0)),
                     ..default()
                 },
@@ -372,7 +429,7 @@ fn spawn_board(
             for p in &points {
                 parent.spawn(SpriteBundle {
                     sprite: Sprite {
-                        color: Color::srgb(0.2, 0.2, 0.24),
+                        color: palette.track_cell,
                         custom_size: Some(Vec2::splat(26.0)),
                         ..default()
                     },
@@ -384,7 +441,7 @@ fn spawn_board(
             for safe_idx in safe_track_indices() {
                 parent.spawn(SpriteBundle {
                     sprite: Sprite {
-                        color: Color::srgb(0.95, 0.95, 0.58),
+                        color: palette.safe_cell,
                         custom_size: Some(Vec2::splat(14.0)),
                         ..default()
                     },
@@ -437,7 +494,7 @@ fn spawn_board(
                             ..default()
                         },
                     ),
-                    transform: Transform::from_xyz(0.0, 0.0, 40.0),
+                    transform: Transform::from_translation(dice_anchor),
                     ..default()
                 },
                 DiceValueText,
@@ -453,7 +510,9 @@ fn spawn_board(
                             ..default()
                         },
                     ),
-                    transform: Transform::from_xyz(0.0, -56.0, 40.0),
+                    transform: Transform::from_translation(
+                        dice_anchor + Vec3::new(0.0, -56.0, 0.0),
+                    ),
                     ..default()
                 },
                 DiceSubText,
@@ -666,12 +725,10 @@ fn handle_pointer_input(
     };
 
     if game.last_roll.is_none() {
-        let dice_center = Vec2::ZERO;
-        if pointer_world.distance(dice_center) <= DICE_PICK_RADIUS {
-            play_sfx(&mut commands, sfx.roll.clone());
-            let roll = roll_for_current_player(&mut game);
-            start_dice_roll_animation(&mut dice_animation, roll);
-        }
+        let _ = pointer_world;
+        play_sfx(&mut commands, sfx.roll.clone());
+        let roll = roll_for_current_player(&mut game);
+        start_dice_roll_animation(&mut dice_animation, roll);
         return;
     }
 

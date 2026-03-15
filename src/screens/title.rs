@@ -1,10 +1,17 @@
 //! The title screen that appears when the game starts.
 
-use bevy::{prelude::*, ui::Val::*, window::ReceivedCharacter};
+use bevy::{
+    input::{
+        keyboard::{Key, KeyboardInput},
+        ButtonState,
+    },
+    prelude::*,
+    ui::Val::*,
+};
 
 use crate::{
     screens::{
-        gameplay::{random_name, BotStrategy, MatchSetup},
+        gameplay::{random_name, BotStrategy, MatchSetup, StageTheme},
         Screen,
     },
     theme::{palette::*, prelude::*},
@@ -21,6 +28,9 @@ struct SeatPageLabel;
 
 #[derive(Component)]
 struct NameEditHint;
+
+#[derive(Component)]
+struct ThemeLabel;
 
 #[derive(Component)]
 struct ActionButton(SeatAction);
@@ -44,6 +54,7 @@ enum SeatAction {
     PrevSeatPage,
     NextSeatPage,
     RandomizeBots,
+    CycleTheme,
     Start,
     Credits,
 }
@@ -60,6 +71,7 @@ pub(super) fn plugin(app: &mut App) {
         (
             refresh_seat_summaries,
             refresh_name_edit_hint,
+            refresh_theme_label,
             refresh_seat_page_ui,
             handle_action_buttons,
             handle_name_typing,
@@ -132,6 +144,17 @@ fn spawn_title_screen(mut commands: Commands) {
                             },
                         ),
                         NameEditHint,
+                    ));
+                    panel.spawn((
+                        TextBundle::from_section(
+                            "",
+                            TextStyle {
+                                font_size: 14.0,
+                                color: Color::srgb(1.0, 0.92, 0.7),
+                                ..default()
+                            },
+                        ),
+                        ThemeLabel,
                     ));
 
                     panel
@@ -249,6 +272,7 @@ fn spawn_title_screen(mut commands: Commands) {
                                 "Randomize bot names/strategies",
                                 SeatAction::RandomizeBots,
                             );
+                            action_btn(row, "Stage Theme", SeatAction::CycleTheme);
                             action_btn(row, "Start Game", SeatAction::Start);
                             action_btn(row, "Credits", SeatAction::Credits);
 
@@ -324,9 +348,18 @@ fn refresh_name_edit_hint(
 ) {
     for mut text in &mut labels {
         text.sections[0].value = format!(
-            "Typing targets Seat {} name ({}). Type on keyboard, Backspace=delete, Delete=clear.",
+            "Typing Seat {} name ({}). Keyboard input, Backspace=delete, Delete=clear.",
             name_edit.seat + 1,
             setup.seats[name_edit.seat].name
+        );
+    }
+}
+
+fn refresh_theme_label(setup: Res<MatchSetup>, mut labels: Query<&mut Text, With<ThemeLabel>>) {
+    for mut text in &mut labels {
+        text.sections[0].value = format!(
+            "Current stage theme: {} (tap Stage Theme to cycle)",
+            setup.stage_theme.label()
         );
     }
 }
@@ -401,6 +434,13 @@ fn handle_action_buttons(
                     }
                 }
             }
+            SeatAction::CycleTheme => {
+                let idx = StageTheme::ALL
+                    .iter()
+                    .position(|theme| *theme == setup.stage_theme)
+                    .unwrap_or(0);
+                setup.stage_theme = StageTheme::ALL[(idx + 1) % StageTheme::ALL.len()];
+            }
             SeatAction::Start => {
                 for (i, seat) in setup.seats.iter_mut().enumerate() {
                     if seat.name.trim().is_empty() {
@@ -419,7 +459,7 @@ fn handle_action_buttons(
 }
 
 fn handle_name_typing(
-    mut chars: EventReader<ReceivedCharacter>,
+    mut keyboard_events: EventReader<KeyboardInput>,
     keys: Res<ButtonInput<KeyCode>>,
     mut setup: ResMut<MatchSetup>,
     name_edit: Res<NameEditState>,
@@ -433,16 +473,25 @@ fn handle_name_typing(
         seat.name.clear();
     }
 
-    for event in chars.read() {
-        let c = event.char;
-        if c.is_control() {
+    for event in keyboard_events.read() {
+        if event.state != ButtonState::Pressed {
             continue;
         }
-        if seat.name.chars().count() >= 18 {
+
+        let Key::Character(chars) = &event.logical_key else {
             continue;
-        }
-        if c.is_ascii_alphanumeric() || " -_.'".contains(c) {
-            seat.name.push(c);
+        };
+
+        for c in chars.chars() {
+            if c.is_control() {
+                continue;
+            }
+            if seat.name.chars().count() >= 18 {
+                break;
+            }
+            if c.is_ascii_alphanumeric() || " -_.'".contains(c) {
+                seat.name.push(c);
+            }
         }
     }
 }
