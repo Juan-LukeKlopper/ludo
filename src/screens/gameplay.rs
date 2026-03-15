@@ -1153,7 +1153,7 @@ fn token_position_for_state(
     player: usize,
     token: usize,
     state: TokenState,
-    points: &[Vec3; 52],
+    points: &[Vec3],
 ) -> Vec3 {
     match state {
         TokenState::Yard => yard_position(player, token),
@@ -1170,7 +1170,7 @@ fn movement_waypoints(
     token: usize,
     from: TokenState,
     to: TokenState,
-    points: &[Vec3; 52],
+    points: &[Vec3],
 ) -> Vec<Vec3> {
     match (from, to) {
         (TokenState::Yard, TokenState::Path(0)) => {
