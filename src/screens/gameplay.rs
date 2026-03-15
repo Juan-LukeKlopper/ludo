@@ -1,6 +1,9 @@
 //! The screen state for the main gameplay.
 
-use bevy::{input::common_conditions::input_just_pressed, prelude::*, window::PrimaryWindow};
+use bevy::{
+    input::common_conditions::input_just_pressed, math::primitives::Circle, prelude::*,
+    window::PrimaryWindow,
+};
 use rand::{seq::IteratorRandom, Rng};
 
 use crate::{
@@ -20,7 +23,7 @@ const CELL_SIZE: f32 = 36.0;
 const START_INDICES: [u8; 4] = [0, 13, 26, 39];
 const SAFE_OFFSET: u8 = 8;
 const TOKEN_PICK_RADIUS: f32 = 30.0;
-const DICE_PICK_RADIUS: f32 = 54.0;
+const DICE_PICK_RADIUS: f32 = 72.0;
 const PLAYER_NAMES: [&str; 12] = [
     "Alex", "Sam", "Jordan", "Taylor", "Morgan", "Riley", "Casey", "Sky", "Avery", "Kai", "Nova",
     "Jules",
@@ -29,6 +32,7 @@ const PLAYER_NAMES: [&str; 12] = [
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<MatchSetup>();
     app.init_resource::<LastMatchResult>();
+    app.init_resource::<DiceAnimation>();
     app.add_systems(OnEnter(Screen::Gameplay), (spawn_board, setup_match));
 
     app.load_resource::<GameplayMusic>();
@@ -167,6 +171,23 @@ struct StatusText;
 #[derive(Component)]
 struct DiceText;
 
+#[derive(Resource)]
+struct DiceAnimation {
+    timer: Timer,
+    rolling: bool,
+    last_face: Option<u8>,
+}
+
+impl Default for DiceAnimation {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(0.6, TimerMode::Once),
+            rolling: false,
+            last_face: None,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PlayerKind {
     Human,
@@ -271,7 +292,12 @@ fn setup_match(mut commands: Commands, setup: Res<MatchSetup>) {
     });
 }
 
-fn spawn_board(mut commands: Commands) {
+fn spawn_board(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    let token_mesh = meshes.add(Circle::new(1.0));
     commands
         .spawn((
             Name::new("GameplayRoot"),
@@ -370,12 +396,12 @@ fn spawn_board(mut commands: Commands) {
                     text: Text::from_section(
                         "",
                         TextStyle {
-                            font_size: 24.0,
+                            font_size: 18.0,
                             color: Color::WHITE,
                             ..default()
                         },
                     ),
-                    transform: Transform::from_xyz(0.0, 350.0, 12.0),
+                    transform: Transform::from_xyz(0.0, 370.0, 12.0),
                     ..default()
                 },
                 StatusText,
@@ -386,12 +412,12 @@ fn spawn_board(mut commands: Commands) {
                     text: Text::from_section(
                         "🎲 -",
                         TextStyle {
-                            font_size: 40.0,
+                            font_size: 64.0,
                             color: Color::WHITE,
                             ..default()
                         },
                     ),
-                    transform: Transform::from_xyz(300.0, 300.0, 12.0),
+                    transform: Transform::from_xyz(0.0, 0.0, 40.0),
                     ..default()
                 },
                 DiceText,
@@ -400,22 +426,44 @@ fn spawn_board(mut commands: Commands) {
             for (player, color) in PLAYER_COLORS.into_iter().enumerate() {
                 for token in 0..4 {
                     let start = yard_position(player, token);
-                    parent.spawn((
-                        SpriteBundle {
-                            sprite: Sprite {
-                                color,
-                                custom_size: Some(Vec2::splat(20.0)),
-                                ..default()
+                    parent
+                        .spawn((
+                            Transform::from_translation(start),
+                            GlobalTransform::default(),
+                            TokenVisual {
+                                player,
+                                token,
+                                target: start,
                             },
-                            transform: Transform::from_translation(start),
-                            ..default()
-                        },
-                        TokenVisual {
-                            player,
-                            token,
-                            target: start,
-                        },
-                    ));
+                        ))
+                        .with_children(|token_parent| {
+                            token_parent.spawn(MaterialMesh2dBundle {
+                                mesh: token_mesh.clone().into(),
+                                material: materials.add(Color::srgba(0.0, 0.0, 0.0, 0.3)),
+                                transform: Transform::from_xyz(1.0, -2.5, -0.3)
+                                    .with_scale(Vec3::splat(13.0)),
+                                ..default()
+                            });
+                            token_parent.spawn(MaterialMesh2dBundle {
+                                mesh: token_mesh.clone().into(),
+                                material: materials.add(Color::srgb(0.97, 0.97, 0.97)),
+                                transform: Transform::from_scale(Vec3::splat(11.5)),
+                                ..default()
+                            });
+                            token_parent.spawn(MaterialMesh2dBundle {
+                                mesh: token_mesh.clone().into(),
+                                material: materials.add(color),
+                                transform: Transform::from_scale(Vec3::splat(8.4)),
+                                ..default()
+                            });
+                            token_parent.spawn(MaterialMesh2dBundle {
+                                mesh: token_mesh.clone().into(),
+                                material: materials.add(Color::srgba(1.0, 1.0, 1.0, 0.35)),
+                                transform: Transform::from_xyz(-2.2, 2.1, 0.2)
+                                    .with_scale(Vec3::splat(3.0)),
+                                ..default()
+                            });
+                        });
                 }
             }
         });
@@ -438,6 +486,7 @@ fn handle_roll_input(
     keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     mut game: ResMut<LudoGame>,
+    mut dice_animation: ResMut<DiceAnimation>,
     sfx: Res<GameplaySfx>,
 ) {
     if game_over(&game)
@@ -448,7 +497,8 @@ fn handle_roll_input(
     }
     if keys.just_pressed(KeyCode::Space) {
         play_sfx(&mut commands, sfx.roll.clone());
-        roll_for_current_player(&mut game);
+        let roll = roll_for_current_player(&mut game);
+        start_dice_roll_animation(&mut dice_animation, roll);
     }
 }
 
@@ -456,6 +506,7 @@ fn handle_token_selection(
     keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     mut game: ResMut<LudoGame>,
+    mut dice_animation: ResMut<DiceAnimation>,
     sfx: Res<GameplaySfx>,
 ) {
     if game_over(&game)
@@ -546,10 +597,11 @@ fn handle_pointer_input(
     };
 
     if game.last_roll.is_none() {
-        let dice_center = Vec2::new(300.0, 300.0);
+        let dice_center = Vec2::ZERO;
         if pointer_world.distance(dice_center) <= DICE_PICK_RADIUS {
             play_sfx(&mut commands, sfx.roll.clone());
-            roll_for_current_player(&mut game);
+            let roll = roll_for_current_player(&mut game);
+            start_dice_roll_animation(&mut dice_animation, roll);
         }
         return;
     }
@@ -568,6 +620,7 @@ fn run_bot_turn(
     time: Res<Time>,
     mut commands: Commands,
     mut game: ResMut<LudoGame>,
+    mut dice_animation: ResMut<DiceAnimation>,
     sfx: Res<GameplaySfx>,
 ) {
     if game_over(&game) || game.players[game.current].kind != PlayerKind::Bot {
@@ -581,7 +634,8 @@ fn run_bot_turn(
 
     if game.last_roll.is_none() {
         play_sfx(&mut commands, sfx.roll.clone());
-        roll_for_current_player(&mut game);
+        let roll = roll_for_current_player(&mut game);
+        start_dice_roll_animation(&mut dice_animation, roll);
     } else if let Some(token) =
         pick_bot_move(&game, game.current, game.selectable_tokens.as_slice())
     {
@@ -647,7 +701,7 @@ fn score_move(
     }
 }
 
-fn roll_for_current_player(game: &mut LudoGame) {
+fn roll_for_current_player(game: &mut LudoGame) -> u8 {
     let roll = rand::thread_rng().gen_range(1..=6);
     game.last_roll = Some(roll);
 
@@ -660,7 +714,7 @@ fn roll_for_current_player(game: &mut LudoGame) {
             );
             game.last_roll = None;
             end_turn(game, false);
-            return;
+            return roll;
         }
     }
 
@@ -674,7 +728,7 @@ fn roll_for_current_player(game: &mut LudoGame) {
         game.last_roll = None;
         game.keyboard_selected_token = None;
         end_turn(game, roll == 6);
-        return;
+        return roll;
     }
 
     game.message = if game.players[game.current].kind == PlayerKind::Human {
@@ -694,6 +748,14 @@ fn roll_for_current_player(game: &mut LudoGame) {
             game.players[game.current].strategy.label()
         )
     };
+
+    roll
+}
+
+fn start_dice_roll_animation(dice_animation: &mut DiceAnimation, roll: u8) {
+    dice_animation.rolling = true;
+    dice_animation.last_face = Some(roll);
+    dice_animation.timer.reset();
 }
 
 fn apply_move(game: &mut LudoGame, token_index: usize, commands: &mut Commands, sfx: &GameplaySfx) {
@@ -827,21 +889,27 @@ fn sync_token_targets(game: Res<LudoGame>, mut query: Query<&mut TokenVisual>) {
 
 fn update_token_visual_state(
     game: Res<LudoGame>,
-    mut token_query: Query<(&TokenVisual, &mut Sprite)>,
+    time: Res<Time>,
+    mut token_query: Query<(&TokenVisual, &mut Transform)>,
 ) {
-    for (token_visual, mut sprite) in &mut token_query {
+    for (token_visual, mut transform) in &mut token_query {
         let is_current = token_visual.player == game.current;
         let is_selectable = game.selectable_tokens.contains(&token_visual.token) && is_current;
         let is_selected = game.keyboard_selected_token == Some(token_visual.token) && is_selectable;
 
-        let size = if is_selected {
-            30.0
+        let scale = if is_selected {
+            1.6
         } else if is_selectable {
-            25.0
+            1.35
         } else {
-            20.0
+            1.0
         };
-        sprite.custom_size = Some(Vec2::splat(size));
+        let pulse = if is_selectable {
+            1.0 + (time.elapsed_seconds() * 8.0).sin().abs() * 0.1
+        } else {
+            1.0
+        };
+        transform.scale = Vec3::splat(scale * pulse);
     }
 }
 
@@ -934,7 +1002,7 @@ fn update_status_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With
     };
 
     text.sections[0].value = format!(
-        "{}\nTurn: {} ({}) | Last roll: {} | Winners: {}\nControls: Space/Tap 🎲=Roll, 1-4 or Arrows+Enter/Space or Tap token=Move, Esc=Title",
+        "Now: {}\nTurn: {} ({})   Last roll: {}\nWinners: {}\nControls: Space/Tap 🎲 roll · 1-4 or Arrows pick · Enter/Tap move · Esc title",
         game.message,
         game.players[game.current].name,
         if game.players[game.current].kind == PlayerKind::Human {
@@ -947,16 +1015,43 @@ fn update_status_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With
     );
 }
 
-fn update_dice_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With<DiceText>>) {
-    let Ok(mut text) = text_query.get_single_mut() else {
+fn update_dice_text(
+    time: Res<Time>,
+    game: Res<LudoGame>,
+    mut dice_animation: ResMut<DiceAnimation>,
+    mut text_query: Query<(&mut Text, &mut Transform), With<DiceText>>,
+) {
+    let Ok((mut text, mut transform)) = text_query.get_single_mut() else {
         return;
     };
 
-    let face = game
-        .last_roll
-        .map(|roll| roll.to_string())
-        .unwrap_or_else(|| "-".into());
-    text.sections[0].value = format!("🎲 {}", face);
+    let face = if dice_animation.rolling {
+        dice_animation.timer.tick(time.delta());
+        let spinner = ((time.elapsed_seconds() * 25.0) as u8 % 6) + 1;
+        transform.rotation = Quat::from_rotation_z(time.elapsed_seconds() * 11.0);
+        transform.scale = Vec3::splat(1.0 + (time.elapsed_seconds() * 12.0).sin().abs() * 0.16);
+
+        if dice_animation.timer.finished() {
+            dice_animation.rolling = false;
+            transform.rotation = Quat::IDENTITY;
+            transform.scale = Vec3::ONE;
+            dice_animation.last_face.unwrap_or(spinner)
+        } else {
+            spinner
+        }
+    } else {
+        transform.rotation = Quat::IDENTITY;
+        transform.scale = Vec3::ONE;
+        game.last_roll
+            .or(dice_animation.last_face)
+            .unwrap_or_default()
+    };
+
+    text.sections[0].value = if face == 0 {
+        "🎲 -".to_string()
+    } else {
+        format!("🎲 {face}")
+    };
 }
 
 fn game_over(game: &LudoGame) -> bool {
