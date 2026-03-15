@@ -18,6 +18,9 @@ const PLAYER_COLORS: [Color; 4] = [
 const BOARD_WORLD_SIZE: f32 = 860.0;
 const CELL_SIZE: f32 = 36.0;
 const START_INDICES: [u8; 4] = [0, 13, 26, 39];
+const SAFE_OFFSET: u8 = 8;
+const TOKEN_PICK_RADIUS: f32 = 30.0;
+const DICE_PICK_RADIUS: f32 = 54.0;
 const PLAYER_NAMES: [&str; 12] = [
     "Alex", "Sam", "Jordan", "Taylor", "Morgan", "Riley", "Casey", "Sky", "Avery", "Kai", "Nova",
     "Jules",
@@ -38,8 +41,11 @@ pub(super) fn plugin(app: &mut App) {
         (
             handle_roll_input,
             handle_token_selection,
+            handle_keyboard_token_cursor,
+            handle_pointer_input,
             run_bot_turn,
             sync_token_targets,
+            update_token_visual_state,
             animate_token_transforms,
             fit_gameplay_board_to_window,
             update_status_text,
@@ -188,6 +194,7 @@ struct LudoGame {
     last_roll: Option<u8>,
     consecutive_sixes: u8,
     selectable_tokens: Vec<usize>,
+    keyboard_selected_token: Option<usize>,
     winner_order: Vec<usize>,
     message: String,
     bot_timer: Timer,
@@ -254,8 +261,11 @@ fn setup_match(mut commands: Commands, setup: Res<MatchSetup>) {
         last_roll: None,
         consecutive_sixes: 0,
         selectable_tokens: Vec::new(),
+        keyboard_selected_token: None,
         winner_order: Vec::new(),
-        message: "Roll the die (Space). Then pick token 1-4.".into(),
+        message:
+            "Roll the die (Space or tap 🎲). Then choose a token with 1-4, arrows+Enter, or tap."
+                .into(),
         bot_timer: Timer::from_seconds(0.65, TimerMode::Repeating),
         finished: false,
     });
@@ -312,14 +322,29 @@ fn spawn_board(mut commands: Commands) {
                 ..default()
             });
 
-            for p in track_points() {
+            let points = track_points();
+            for p in &points {
                 parent.spawn(SpriteBundle {
                     sprite: Sprite {
                         color: Color::srgb(0.2, 0.2, 0.24),
                         custom_size: Some(Vec2::splat(26.0)),
                         ..default()
                     },
-                    transform: Transform::from_translation(p),
+                    transform: Transform::from_translation(*p),
+                    ..default()
+                });
+            }
+
+            for safe_idx in safe_track_indices() {
+                parent.spawn(SpriteBundle {
+                    sprite: Sprite {
+                        color: Color::srgb(0.95, 0.95, 0.58),
+                        custom_size: Some(Vec2::splat(14.0)),
+                        ..default()
+                    },
+                    transform: Transform::from_translation(
+                        points[safe_idx as usize] + Vec3::new(0.0, 0.0, 1.0),
+                    ),
                     ..default()
                 });
             }
@@ -451,10 +476,91 @@ fn handle_token_selection(
     {
         if keys.just_pressed(key) {
             if game.selectable_tokens.contains(&idx) {
+                game.keyboard_selected_token = Some(idx);
                 apply_move(&mut game, idx, &mut commands, &sfx);
             }
             break;
         }
+    }
+}
+
+fn handle_keyboard_token_cursor(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut commands: Commands,
+    mut game: ResMut<LudoGame>,
+    sfx: Res<GameplaySfx>,
+) {
+    if game_over(&game)
+        || game.players[game.current].kind != PlayerKind::Human
+        || game.last_roll.is_none()
+        || game.selectable_tokens.is_empty()
+    {
+        return;
+    }
+
+    let mut moved_cursor = false;
+
+    if keys.just_pressed(KeyCode::ArrowLeft) || keys.just_pressed(KeyCode::ArrowUp) {
+        game.keyboard_selected_token = Some(step_selected_token(&game, -1));
+        moved_cursor = true;
+    } else if keys.just_pressed(KeyCode::ArrowRight) || keys.just_pressed(KeyCode::ArrowDown) {
+        game.keyboard_selected_token = Some(step_selected_token(&game, 1));
+        moved_cursor = true;
+    }
+
+    if moved_cursor {
+        return;
+    }
+
+    if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space) {
+        let token = game
+            .keyboard_selected_token
+            .filter(|t| game.selectable_tokens.contains(t))
+            .unwrap_or(game.selectable_tokens[0]);
+        game.keyboard_selected_token = Some(token);
+        apply_move(&mut game, token, &mut commands, &sfx);
+    }
+}
+
+fn handle_pointer_input(
+    mouse: Res<ButtonInput<MouseButton>>,
+    touches: Res<Touches>,
+    window_q: Query<&Window, With<PrimaryWindow>>,
+    camera_q: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
+    token_q: Query<(&TokenVisual, &GlobalTransform)>,
+    mut commands: Commands,
+    mut game: ResMut<LudoGame>,
+    sfx: Res<GameplaySfx>,
+) {
+    if game_over(&game) || game.players[game.current].kind != PlayerKind::Human {
+        return;
+    }
+
+    let pressed = mouse.just_pressed(MouseButton::Left) || touches.any_just_pressed();
+    if !pressed {
+        return;
+    }
+
+    let Some(pointer_world) = pointer_world_position(&window_q, &camera_q, &touches) else {
+        return;
+    };
+
+    if game.last_roll.is_none() {
+        let dice_center = Vec2::new(300.0, 300.0);
+        if pointer_world.distance(dice_center) <= DICE_PICK_RADIUS {
+            play_sfx(&mut commands, sfx.roll.clone());
+            roll_for_current_player(&mut game);
+        }
+        return;
+    }
+
+    if game.selectable_tokens.is_empty() {
+        return;
+    }
+
+    if let Some(token) = nearest_selectable_token(&game, pointer_world, &token_q) {
+        game.keyboard_selected_token = Some(token);
+        apply_move(&mut game, token, &mut commands, &sfx);
     }
 }
 
@@ -559,12 +665,14 @@ fn roll_for_current_player(game: &mut LudoGame) {
     }
 
     game.selectable_tokens = legal_moves(game, game.current, roll);
+    game.keyboard_selected_token = game.selectable_tokens.first().copied();
     if game.selectable_tokens.is_empty() {
         game.message = format!(
             "{} rolled {roll} and has no legal moves.",
             game.players[game.current].name
         );
         game.last_roll = None;
+        game.keyboard_selected_token = None;
         end_turn(game, roll == 6);
         return;
     }
@@ -610,8 +718,8 @@ fn apply_move(game: &mut LudoGame, token_index: usize, commands: &mut Commands, 
     let mut capture_happened = false;
     if let Some(path) = landed_path.filter(|p| *p <= 50) {
         let track = absolute_track_index(player, path);
-        let same_enemy: Vec<(usize, usize)> =
-            (0..4)
+        if !is_safe_track(track) {
+            let same_enemy: Vec<(usize, usize)> = (0..4)
                 .filter(|other| *other != player)
                 .flat_map(|other| {
                     game.players[other].tokens.iter().enumerate().filter_map(
@@ -628,17 +736,18 @@ fn apply_move(game: &mut LudoGame, token_index: usize, commands: &mut Commands, 
                 })
                 .collect();
 
-        if same_enemy.len() >= 2 {
-            game.players[player].tokens[token_index] = TokenState::Yard;
-            game.message = format!(
-                "{} crashed into a block and got sent home!",
-                game.players[player].name
-            );
-        } else {
-            for (other, idx) in same_enemy {
-                game.players[other].tokens[idx] = TokenState::Yard;
-                game.players[other].grudge[player] += 1;
-                capture_happened = true;
+            if same_enemy.len() >= 2 {
+                game.players[player].tokens[token_index] = TokenState::Yard;
+                game.message = format!(
+                    "{} crashed into a block and got sent home!",
+                    game.players[player].name
+                );
+            } else {
+                for (other, idx) in same_enemy {
+                    game.players[other].tokens[idx] = TokenState::Yard;
+                    game.players[other].grudge[player] += 1;
+                    capture_happened = true;
+                }
             }
         }
     }
@@ -662,6 +771,7 @@ fn apply_move(game: &mut LudoGame, token_index: usize, commands: &mut Commands, 
 
 fn end_turn(game: &mut LudoGame, mut extra_turn: bool) {
     game.selectable_tokens.clear();
+    game.keyboard_selected_token = None;
     if game_over(game) {
         return;
     }
@@ -714,6 +824,78 @@ fn sync_token_targets(game: Res<LudoGame>, mut query: Query<&mut TokenVisual>) {
         };
     }
 }
+
+fn update_token_visual_state(
+    game: Res<LudoGame>,
+    mut token_query: Query<(&TokenVisual, &mut Sprite)>,
+) {
+    for (token_visual, mut sprite) in &mut token_query {
+        let is_current = token_visual.player == game.current;
+        let is_selectable = game.selectable_tokens.contains(&token_visual.token) && is_current;
+        let is_selected = game.keyboard_selected_token == Some(token_visual.token) && is_selectable;
+
+        let size = if is_selected {
+            30.0
+        } else if is_selectable {
+            25.0
+        } else {
+            20.0
+        };
+        sprite.custom_size = Some(Vec2::splat(size));
+    }
+}
+
+fn step_selected_token(game: &LudoGame, direction: i32) -> usize {
+    let options = &game.selectable_tokens;
+    if options.is_empty() {
+        return 0;
+    }
+
+    let current_idx = game
+        .keyboard_selected_token
+        .and_then(|selected| options.iter().position(|token| *token == selected))
+        .unwrap_or(0) as i32;
+
+    let len = options.len() as i32;
+    let next_idx = (current_idx + direction).rem_euclid(len) as usize;
+    options[next_idx]
+}
+
+fn pointer_world_position(
+    window_q: &Query<&Window, With<PrimaryWindow>>,
+    camera_q: &Query<(&Camera, &GlobalTransform), With<Camera2d>>,
+    touches: &Touches,
+) -> Option<Vec2> {
+    let window = window_q.get_single().ok()?;
+    let screen_position = if let Some(touch) = touches.iter_just_pressed().next() {
+        touch.position()
+    } else {
+        window.cursor_position()?
+    };
+
+    let (camera, camera_transform) = camera_q.get_single().ok()?;
+    camera.viewport_to_world_2d(camera_transform, screen_position)
+}
+
+fn nearest_selectable_token(
+    game: &LudoGame,
+    pointer_world: Vec2,
+    token_q: &Query<(&TokenVisual, &GlobalTransform)>,
+) -> Option<usize> {
+    token_q
+        .iter()
+        .filter(|(token_visual, _)| {
+            token_visual.player == game.current
+                && game.selectable_tokens.contains(&token_visual.token)
+        })
+        .filter_map(|(token_visual, transform)| {
+            let token_pos = transform.translation().truncate();
+            let distance = token_pos.distance(pointer_world);
+            (distance <= TOKEN_PICK_RADIUS).then_some((token_visual.token, distance))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(token, _)| token)
+}
 fn animate_token_transforms(time: Res<Time>, mut query: Query<(&TokenVisual, &mut Transform)>) {
     let speed = (time.delta_seconds() * 9.0).clamp(0.0, 1.0);
     for (token, mut transform) in &mut query {
@@ -752,7 +934,7 @@ fn update_status_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With
     };
 
     text.sections[0].value = format!(
-        "{}\nTurn: {} ({}) | Last roll: {} | Winners: {}\nControls: Space=Roll, 1-4=Move token, Esc=Title",
+        "{}\nTurn: {} ({}) | Last roll: {} | Winners: {}\nControls: Space/Tap 🎲=Roll, 1-4 or Arrows+Enter/Space or Tap token=Move, Esc=Title",
         game.message,
         game.players[game.current].name,
         if game.players[game.current].kind == PlayerKind::Human {
@@ -792,6 +974,23 @@ fn absolute_track_index(player: usize, path: u8) -> u8 {
     (START_INDICES[player] + path) % 52
 }
 
+fn safe_track_indices() -> [u8; 8] {
+    [
+        START_INDICES[0],
+        START_INDICES[1],
+        START_INDICES[2],
+        START_INDICES[3],
+        (START_INDICES[0] + SAFE_OFFSET) % 52,
+        (START_INDICES[1] + SAFE_OFFSET) % 52,
+        (START_INDICES[2] + SAFE_OFFSET) % 52,
+        (START_INDICES[3] + SAFE_OFFSET) % 52,
+    ]
+}
+
+fn is_safe_track(track: u8) -> bool {
+    safe_track_indices().contains(&track)
+}
+
 fn own_count_on_target(game: &LudoGame, player: usize, path: u8) -> usize {
     game.players[player]
         .tokens
@@ -805,6 +1004,9 @@ fn capture_count(game: &LudoGame, player: usize, path: u8) -> usize {
         return 0;
     }
     let target = absolute_track_index(player, path);
+    if is_safe_track(target) {
+        return 0;
+    }
     (0..4)
         .filter(|other| *other != player)
         .map(|other| {
@@ -822,6 +1024,9 @@ fn danger_count(game: &LudoGame, player: usize, path: u8) -> usize {
         return 0;
     }
     let target = absolute_track_index(player, path);
+    if is_safe_track(target) {
+        return 0;
+    }
     (0..4)
         .filter(|other| *other != player)
         .map(|other| {
@@ -883,6 +1088,9 @@ fn hits_player(game: &LudoGame, player: usize, path: u8, target_player: usize) -
         return false;
     }
     let target = absolute_track_index(player, path);
+    if is_safe_track(target) {
+        return false;
+    }
     game.players[target_player]
         .tokens
         .iter()

@@ -68,13 +68,11 @@ fn spawn_title_screen(mut commands: Commands) {
             children
                 .spawn(NodeBundle {
                     style: Style {
-                        width: Percent(96.0),
-                        max_width: Px(1100.0),
-                        max_height: Percent(92.0),
+                        width: Percent(100.0),
+                        height: Percent(100.0),
                         padding: UiRect::all(Px(18.0)),
                         flex_direction: FlexDirection::Column,
                         row_gap: Px(12.0),
-                        overflow: Overflow::clip_y(),
                         ..default()
                     },
                     background_color: BackgroundColor(Color::srgba(0.04, 0.06, 0.11, 0.92)),
