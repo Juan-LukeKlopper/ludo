@@ -2,7 +2,7 @@
 
 use bevy::{
     input::common_conditions::input_just_pressed, math::primitives::Circle, prelude::*,
-    window::PrimaryWindow,
+    sprite::MaterialMesh2dBundle, window::PrimaryWindow,
 };
 use rand::{seq::IteratorRandom, Rng};
 
@@ -506,7 +506,6 @@ fn handle_token_selection(
     keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     mut game: ResMut<LudoGame>,
-    mut dice_animation: ResMut<DiceAnimation>,
     sfx: Res<GameplaySfx>,
 ) {
     if game_over(&game)
@@ -581,6 +580,7 @@ fn handle_pointer_input(
     token_q: Query<(&TokenVisual, &GlobalTransform)>,
     mut commands: Commands,
     mut game: ResMut<LudoGame>,
+    mut dice_animation: ResMut<DiceAnimation>,
     sfx: Res<GameplaySfx>,
 ) {
     if game_over(&game) || game.players[game.current].kind != PlayerKind::Human {
