@@ -175,7 +175,10 @@ struct GameplayBoard;
 struct StatusText;
 
 #[derive(Component)]
-struct DiceText;
+struct DiceValueText;
+
+#[derive(Component)]
+struct DiceSubText;
 
 #[derive(Component)]
 struct ConfettiPiece {
@@ -189,6 +192,8 @@ struct DiceAnimation {
     timer: Timer,
     rolling: bool,
     last_face: Option<u8>,
+    spin_face: u8,
+    spin_tick: Timer,
 }
 
 impl Default for DiceAnimation {
@@ -197,6 +202,8 @@ impl Default for DiceAnimation {
             timer: Timer::from_seconds(0.6, TimerMode::Once),
             rolling: false,
             last_face: None,
+            spin_face: 1,
+            spin_tick: Timer::from_seconds(0.06, TimerMode::Repeating),
         }
     }
 }
@@ -298,9 +305,9 @@ fn setup_match(mut commands: Commands, setup: Res<MatchSetup>) {
         keyboard_selected_token: None,
         winner_order: Vec::new(),
         message:
-            "Roll the die (Space or tap 🎲). Then choose a token with 1-4, arrows+Enter, or tap."
+            "Roll the die (Space or tap DICE). Then choose a token with 1-4, arrows+Enter, or tap."
                 .into(),
-        bot_timer: Timer::from_seconds(0.65, TimerMode::Repeating),
+        bot_timer: Timer::from_seconds(0.12, TimerMode::Repeating),
         finished: false,
     });
 }
@@ -423,7 +430,7 @@ fn spawn_board(
             parent.spawn((
                 Text2dBundle {
                     text: Text::from_section(
-                        "🎲 -",
+                        "-",
                         TextStyle {
                             font_size: 64.0,
                             color: Color::WHITE,
@@ -433,7 +440,23 @@ fn spawn_board(
                     transform: Transform::from_xyz(0.0, 0.0, 40.0),
                     ..default()
                 },
-                DiceText,
+                DiceValueText,
+            ));
+
+            parent.spawn((
+                Text2dBundle {
+                    text: Text::from_section(
+                        "",
+                        TextStyle {
+                            font_size: 28.0,
+                            color: Color::WHITE,
+                            ..default()
+                        },
+                    ),
+                    transform: Transform::from_xyz(0.0, -56.0, 40.0),
+                    ..default()
+                },
+                DiceSubText,
             ));
 
             for (player, color) in PLAYER_COLORS.into_iter().enumerate() {
@@ -478,6 +501,26 @@ fn spawn_board(
                                 material: materials.add(Color::srgba(1.0, 1.0, 1.0, 0.35)),
                                 transform: Transform::from_xyz(-2.2, 2.1, 0.2)
                                     .with_scale(Vec3::splat(3.0)),
+                                ..default()
+                            });
+                            token_parent.spawn(SpriteBundle {
+                                sprite: Sprite {
+                                    color: Color::srgb(0.96, 0.96, 0.96),
+                                    custom_size: Some(Vec2::new(6.8, 6.8)),
+                                    ..default()
+                                },
+                                transform: Transform::from_xyz(0.0, -8.8, 0.15)
+                                    .with_rotation(Quat::from_rotation_z(45_f32.to_radians())),
+                                ..default()
+                            });
+                            token_parent.spawn(SpriteBundle {
+                                sprite: Sprite {
+                                    color,
+                                    custom_size: Some(Vec2::new(3.8, 3.8)),
+                                    ..default()
+                                },
+                                transform: Transform::from_xyz(0.0, -8.2, 0.18)
+                                    .with_rotation(Quat::from_rotation_z(45_f32.to_radians())),
                                 ..default()
                             });
                         });
@@ -653,6 +696,11 @@ fn run_bot_turn(
         return;
     }
 
+    if dice_animation.rolling {
+        game.bot_timer.reset();
+        return;
+    }
+
     game.bot_timer.tick(time.delta());
     if !game.bot_timer.finished() {
         return;
@@ -781,7 +829,9 @@ fn roll_for_current_player(game: &mut LudoGame) -> u8 {
 fn start_dice_roll_animation(dice_animation: &mut DiceAnimation, roll: u8) {
     dice_animation.rolling = true;
     dice_animation.last_face = Some(roll);
+    dice_animation.spin_face = rand::thread_rng().gen_range(1..=6);
     dice_animation.timer.reset();
+    dice_animation.spin_tick.reset();
 }
 
 fn apply_move(game: &mut LudoGame, token_index: usize, commands: &mut Commands, sfx: &GameplaySfx) {
@@ -1089,7 +1139,7 @@ fn update_status_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With
     };
 
     text.sections[0].value = format!(
-        "Now: {}\nTurn: {} ({})   Last roll: {}\nWinners: {}\nControls: Space/Tap 🎲 roll · 1-4 or Arrows pick · Enter/Tap move · Esc title",
+        "Now: {}\nTurn: {} ({})   Last roll: {}\nWinners: {}\nControls: Space/Tap DICE roll | 1-4 or Arrows pick | Enter/Tap move | Esc title",
         game.message,
         game.players[game.current].name,
         if game.players[game.current].kind == PlayerKind::Human {
@@ -1106,29 +1156,42 @@ fn update_dice_text(
     time: Res<Time>,
     game: Res<LudoGame>,
     mut dice_animation: ResMut<DiceAnimation>,
-    mut text_query: Query<(&mut Text, &mut Transform), With<DiceText>>,
+    mut value_query: Query<(&mut Text, &mut Transform), With<DiceValueText>>,
+    mut sub_query: Query<&mut Text, With<DiceSubText>>,
 ) {
-    let Ok((mut text, mut transform)) = text_query.get_single_mut() else {
+    let Ok((mut value_text, mut value_transform)) = value_query.get_single_mut() else {
+        return;
+    };
+    let Ok(mut sub_text) = sub_query.get_single_mut() else {
         return;
     };
 
     let face = if dice_animation.rolling {
         dice_animation.timer.tick(time.delta());
-        let spinner = ((time.elapsed_seconds() * 25.0) as u8 % 6) + 1;
-        transform.rotation = Quat::from_rotation_z(time.elapsed_seconds() * 11.0);
-        transform.scale = Vec3::splat(1.0 + (time.elapsed_seconds() * 12.0).sin().abs() * 0.16);
+        dice_animation.spin_tick.tick(time.delta());
+        if dice_animation.spin_tick.just_finished() {
+            let mut rng = rand::thread_rng();
+            let mut next = rng.gen_range(1..=6);
+            if next == dice_animation.spin_face {
+                next = (next % 6) + 1;
+            }
+            dice_animation.spin_face = next;
+        }
+        value_transform.rotation = Quat::from_rotation_z(time.elapsed_seconds() * 11.0);
+        value_transform.scale =
+            Vec3::splat(1.0 + (time.elapsed_seconds() * 12.0).sin().abs() * 0.16);
 
         if dice_animation.timer.finished() {
             dice_animation.rolling = false;
-            transform.rotation = Quat::IDENTITY;
-            transform.scale = Vec3::ONE;
-            dice_animation.last_face.unwrap_or(spinner)
+            value_transform.rotation = Quat::IDENTITY;
+            value_transform.scale = Vec3::ONE;
+            dice_animation.last_face.unwrap_or(dice_animation.spin_face)
         } else {
-            spinner
+            dice_animation.spin_face
         }
     } else {
-        transform.rotation = Quat::IDENTITY;
-        transform.scale = Vec3::ONE;
+        value_transform.rotation = Quat::IDENTITY;
+        value_transform.scale = Vec3::ONE;
         game.last_roll
             .or(dice_animation.last_face)
             .unwrap_or_default()
@@ -1142,11 +1205,12 @@ fn update_dice_text(
         format!("{}'s turn", game.players[game.current].name)
     };
 
-    text.sections[0].value = if face == 0 {
-        format!("🎲 -\n{sub_header}")
+    value_text.sections[0].value = if face == 0 {
+        "-".to_string()
     } else {
-        format!("🎲 {face}\n{sub_header}")
+        face.to_string()
     };
+    sub_text.sections[0].value = sub_header;
 }
 
 fn token_position_for_state(
