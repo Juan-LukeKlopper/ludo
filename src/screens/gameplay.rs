@@ -1213,13 +1213,15 @@ fn update_dice_text(
     time: Res<Time>,
     game: Res<LudoGame>,
     mut dice_animation: ResMut<DiceAnimation>,
-    mut value_query: Query<(&mut Text, &mut Transform), With<DiceValueText>>,
-    mut sub_query: Query<&mut Text, With<DiceSubText>>,
+    mut text_queries: ParamSet<(
+        Query<(&mut Text, &mut Transform), With<DiceValueText>>,
+        Query<&mut Text, With<DiceSubText>>,
+    )>,
 ) {
-    let Ok((mut value_text, mut value_transform)) = value_query.get_single_mut() else {
+    let Ok((mut value_text, mut value_transform)) = text_queries.p0().get_single_mut() else {
         return;
     };
-    let Ok(mut sub_text) = sub_query.get_single_mut() else {
+    let Ok(mut sub_text) = text_queries.p1().get_single_mut() else {
         return;
     };
 
