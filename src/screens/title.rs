@@ -1,10 +1,17 @@
 //! The title screen that appears when the game starts.
 
-use bevy::{prelude::*, ui::Val::*};
+use bevy::{
+    input::{
+        keyboard::{Key, KeyboardInput},
+        ButtonState,
+    },
+    prelude::*,
+    ui::Val::*,
+};
 
 use crate::{
     screens::{
-        gameplay::{random_name, BotStrategy, MatchSetup},
+        gameplay::{random_name, BotStrategy, MatchSetup, StageTheme},
         Screen,
     },
     theme::{palette::*, prelude::*},
@@ -20,6 +27,12 @@ struct SeatPanel(usize);
 struct SeatPageLabel;
 
 #[derive(Component)]
+struct NameEditHint;
+
+#[derive(Component)]
+struct ThemeLabel;
+
+#[derive(Component)]
 struct ActionButton(SeatAction);
 
 #[derive(Resource, Default)]
@@ -27,30 +40,41 @@ struct SeatPage {
     index: usize,
 }
 
+#[derive(Resource, Default)]
+struct NameEditState {
+    seat: usize,
+}
+
 #[derive(Clone, Copy)]
 enum SeatAction {
     ToggleHuman(usize),
-    CycleName(usize),
+    EditName(usize),
+    ClearName(usize),
     CycleBot(usize),
     PrevSeatPage,
     NextSeatPage,
     RandomizeBots,
+    CycleTheme,
     Start,
     Credits,
 }
 
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<SeatPage>();
+    app.init_resource::<NameEditState>();
     app.add_systems(
         OnEnter(Screen::Title),
-        (reset_seat_page, spawn_title_screen),
+        (reset_seat_page, reset_name_edit, spawn_title_screen),
     );
     app.add_systems(
         Update,
         (
             refresh_seat_summaries,
+            refresh_name_edit_hint,
+            refresh_theme_label,
             refresh_seat_page_ui,
             handle_action_buttons,
+            handle_name_typing,
         )
             .run_if(in_state(Screen::Title)),
     );
@@ -58,6 +82,10 @@ pub(super) fn plugin(app: &mut App) {
 
 fn reset_seat_page(mut seat_page: ResMut<SeatPage>) {
     seat_page.index = 0;
+}
+
+fn reset_name_edit(mut name_edit: ResMut<NameEditState>) {
+    name_edit.seat = 0;
 }
 
 fn spawn_title_screen(mut commands: Commands) {
@@ -105,6 +133,28 @@ fn spawn_title_screen(mut commands: Commands) {
                             },
                         ),
                         SeatPageLabel,
+                    ));
+                    panel.spawn((
+                        TextBundle::from_section(
+                            "",
+                            TextStyle {
+                                font_size: 14.0,
+                                color: Color::srgb(0.85, 0.93, 1.0),
+                                ..default()
+                            },
+                        ),
+                        NameEditHint,
+                    ));
+                    panel.spawn((
+                        TextBundle::from_section(
+                            "",
+                            TextStyle {
+                                font_size: 14.0,
+                                color: Color::srgb(1.0, 0.92, 0.7),
+                                ..default()
+                            },
+                        ),
+                        ThemeLabel,
                     ));
 
                     panel
@@ -187,8 +237,13 @@ fn spawn_title_screen(mut commands: Commands) {
                                                 );
                                                 action_btn(
                                                     row,
-                                                    format!("Seat {}: Change Name", seat + 1),
-                                                    SeatAction::CycleName(seat),
+                                                    format!("Seat {}: Edit Name", seat + 1),
+                                                    SeatAction::EditName(seat),
+                                                );
+                                                action_btn(
+                                                    row,
+                                                    format!("Seat {}: Clear Name", seat + 1),
+                                                    SeatAction::ClearName(seat),
                                                 );
                                                 action_btn(
                                                     row,
@@ -217,6 +272,7 @@ fn spawn_title_screen(mut commands: Commands) {
                                 "Randomize bot names/strategies",
                                 SeatAction::RandomizeBots,
                             );
+                            action_btn(row, "Stage Theme", SeatAction::CycleTheme);
                             action_btn(row, "Start Game", SeatAction::Start);
                             action_btn(row, "Credits", SeatAction::Credits);
 
@@ -262,15 +318,48 @@ fn action_btn(parent: &mut ChildBuilder, text: impl Into<String>, action: SeatAc
         });
 }
 
-fn refresh_seat_summaries(setup: Res<MatchSetup>, mut labels: Query<(&SeatSummary, &mut Text)>) {
+fn refresh_seat_summaries(
+    setup: Res<MatchSetup>,
+    name_edit: Res<NameEditState>,
+    mut labels: Query<(&SeatSummary, &mut Text)>,
+) {
     for (seat, mut text) in &mut labels {
         let s = &setup.seats[seat.0];
+        let editing = if name_edit.seat == seat.0 {
+            " [EDITING]"
+        } else {
+            ""
+        };
         text.sections[0].value = format!(
-            "Seat {} | {} | Name: {} | Bot: {}",
+            "Seat {}{} | {} | Name: {} | Bot: {}",
             seat.0 + 1,
+            editing,
             if s.human { "Human" } else { "Bot" },
             s.name,
             s.bot_strategy.label()
+        );
+    }
+}
+
+fn refresh_name_edit_hint(
+    setup: Res<MatchSetup>,
+    name_edit: Res<NameEditState>,
+    mut labels: Query<&mut Text, With<NameEditHint>>,
+) {
+    for mut text in &mut labels {
+        text.sections[0].value = format!(
+            "Typing Seat {} name ({}). Keyboard input, Backspace=delete, Delete=clear.",
+            name_edit.seat + 1,
+            setup.seats[name_edit.seat].name
+        );
+    }
+}
+
+fn refresh_theme_label(setup: Res<MatchSetup>, mut labels: Query<&mut Text, With<ThemeLabel>>) {
+    for mut text in &mut labels {
+        text.sections[0].value = format!(
+            "Current stage theme: {} (tap Stage Theme to cycle)",
+            setup.stage_theme.label()
         );
     }
 }
@@ -300,6 +389,7 @@ fn handle_action_buttons(
     mut interaction_q: Query<(&ActionButton, &Interaction), (With<Button>, Changed<Interaction>)>,
     mut setup: ResMut<MatchSetup>,
     mut seat_page: ResMut<SeatPage>,
+    mut name_edit: ResMut<NameEditState>,
     mut next_screen: ResMut<NextState<Screen>>,
 ) {
     for (button, interaction) in &mut interaction_q {
@@ -316,8 +406,11 @@ fn handle_action_buttons(
                     setup.seats[i].name = format!("Bot {}", i + 1);
                 }
             }
-            SeatAction::CycleName(i) => {
-                setup.seats[i].name = random_name();
+            SeatAction::EditName(i) => {
+                name_edit.seat = i;
+            }
+            SeatAction::ClearName(i) => {
+                setup.seats[i].name.clear();
             }
             SeatAction::CycleBot(i) => {
                 let current = setup.seats[i].bot_strategy;
@@ -341,8 +434,64 @@ fn handle_action_buttons(
                     }
                 }
             }
-            SeatAction::Start => next_screen.set(Screen::Gameplay),
+            SeatAction::CycleTheme => {
+                let idx = StageTheme::ALL
+                    .iter()
+                    .position(|theme| *theme == setup.stage_theme)
+                    .unwrap_or(0);
+                setup.stage_theme = StageTheme::ALL[(idx + 1) % StageTheme::ALL.len()];
+            }
+            SeatAction::Start => {
+                for (i, seat) in setup.seats.iter_mut().enumerate() {
+                    if seat.name.trim().is_empty() {
+                        seat.name = if seat.human {
+                            format!("Player {}", i + 1)
+                        } else {
+                            format!("Bot {}", i + 1)
+                        };
+                    }
+                }
+                next_screen.set(Screen::Gameplay)
+            }
             SeatAction::Credits => next_screen.set(Screen::Credits),
+        }
+    }
+}
+
+fn handle_name_typing(
+    mut keyboard_events: EventReader<KeyboardInput>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut setup: ResMut<MatchSetup>,
+    name_edit: Res<NameEditState>,
+) {
+    let seat = &mut setup.seats[name_edit.seat];
+
+    if keys.just_pressed(KeyCode::Backspace) {
+        seat.name.pop();
+    }
+    if keys.just_pressed(KeyCode::Delete) {
+        seat.name.clear();
+    }
+
+    for event in keyboard_events.read() {
+        if event.state != ButtonState::Pressed {
+            continue;
+        }
+
+        let Key::Character(chars) = &event.logical_key else {
+            continue;
+        };
+
+        for c in chars.chars() {
+            if c.is_control() {
+                continue;
+            }
+            if seat.name.chars().count() >= 18 {
+                break;
+            }
+            if c.is_ascii_alphanumeric() || " -_.'".contains(c) {
+                seat.name.push(c);
+            }
         }
     }
 }

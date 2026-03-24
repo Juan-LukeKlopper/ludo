@@ -25,3 +25,15 @@ for how to fix this.
 A camera not moving smoothly is pretty much always caused by the camera position being tied too tightly to the character's position.
 To give the camera some inertia, use the [`smooth_nudge`](https://github.com/bevyengine/bevy/blob/main/examples/movement/smooth_follow.rs#L127-L142)
 to interpolate the camera position towards its target position.
+
+
+## `cargo check` fails on Linux with an `alsa-sys` / `alsa.pc` error
+
+Bevy's native audio stack relies on the system ALSA development files on Linux.
+If they are missing, builds fail during dependency compilation with an error mentioning `alsa-sys` and `alsa.pc`.
+
+Typical fixes:
+
+- Install ALSA development packages (`alsa-lib-devel` on Fedora/RHEL, `libasound2-dev` on Debian/Ubuntu).
+- If ALSA is installed in a non-standard location, set `PKG_CONFIG_PATH` to the directory containing `alsa.pc`.
+- For CI or local verification where native audio is not needed, run web-target checks instead (for example `cargo check --target wasm32-unknown-unknown`).
