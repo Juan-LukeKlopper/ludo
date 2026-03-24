@@ -1,7 +1,11 @@
 //! The screen state for the main gameplay.
 
-use bevy::{input::common_conditions::input_just_pressed, prelude::*, window::PrimaryWindow};
+use bevy::{
+    input::common_conditions::input_just_pressed, math::primitives::Circle, prelude::*,
+    sprite::MaterialMesh2dBundle, window::PrimaryWindow,
+};
 use rand::{seq::IteratorRandom, Rng};
+use std::{collections::VecDeque, f32::consts::PI};
 
 use crate::{
     asset_tracking::LoadResource,
@@ -20,7 +24,6 @@ const CELL_SIZE: f32 = 36.0;
 const START_INDICES: [u8; 4] = [0, 13, 26, 39];
 const SAFE_OFFSET: u8 = 8;
 const TOKEN_PICK_RADIUS: f32 = 30.0;
-const DICE_PICK_RADIUS: f32 = 54.0;
 const PLAYER_NAMES: [&str; 12] = [
     "Alex", "Sam", "Jordan", "Taylor", "Morgan", "Riley", "Casey", "Sky", "Avery", "Kai", "Nova",
     "Jules",
@@ -29,6 +32,7 @@ const PLAYER_NAMES: [&str; 12] = [
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<MatchSetup>();
     app.init_resource::<LastMatchResult>();
+    app.init_resource::<DiceAnimation>();
     app.add_systems(OnEnter(Screen::Gameplay), (spawn_board, setup_match));
 
     app.load_resource::<GameplayMusic>();
@@ -50,6 +54,7 @@ pub(super) fn plugin(app: &mut App) {
             fit_gameplay_board_to_window,
             update_status_text,
             update_dice_text,
+            animate_confetti,
             move_to_win_screen,
             return_to_title_screen
                 .run_if(input_just_pressed(KeyCode::Escape))
@@ -57,6 +62,59 @@ pub(super) fn plugin(app: &mut App) {
         )
             .run_if(in_state(Screen::Gameplay)),
     );
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum StageTheme {
+    Midnight,
+    Ocean,
+    Festival,
+}
+
+impl StageTheme {
+    pub const ALL: [StageTheme; 3] = [
+        StageTheme::Midnight,
+        StageTheme::Ocean,
+        StageTheme::Festival,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            StageTheme::Midnight => "Midnight",
+            StageTheme::Ocean => "Ocean",
+            StageTheme::Festival => "Festival",
+        }
+    }
+}
+
+struct StagePalette {
+    board_bg: Color,
+    cross_bg: Color,
+    track_cell: Color,
+    safe_cell: Color,
+}
+
+fn stage_palette(theme: StageTheme) -> StagePalette {
+    match theme {
+        StageTheme::Midnight => StagePalette {
+            board_bg: Color::srgb(0.08, 0.08, 0.12),
+            cross_bg: Color::srgb(0.06, 0.06, 0.11),
+            track_cell: Color::srgb(0.2, 0.2, 0.24),
+            safe_cell: Color::srgb(0.95, 0.95, 0.58),
+        },
+        StageTheme::Ocean => StagePalette {
+            board_bg: Color::srgb(0.06, 0.17, 0.26),
+            cross_bg: Color::srgb(0.07, 0.21, 0.31),
+            track_cell: Color::srgb(0.32, 0.57, 0.65),
+            safe_cell: Color::srgb(0.8, 0.95, 1.0),
+        },
+        StageTheme::Festival => StagePalette {
+            board_bg: Color::srgb(0.16, 0.07, 0.19),
+            cross_bg: Color::srgb(0.2, 0.09, 0.24),
+            track_cell: Color::srgb(0.45, 0.23, 0.49),
+            safe_cell: Color::srgb(0.98, 0.82, 0.38),
+        },
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -108,6 +166,7 @@ impl BotStrategy {
 #[derive(Resource, Clone)]
 pub struct MatchSetup {
     pub seats: [SeatSetup; 4],
+    pub stage_theme: StageTheme,
 }
 
 #[derive(Clone)]
@@ -142,6 +201,7 @@ impl Default for MatchSetup {
                     bot_strategy: BotStrategy::Random,
                 },
             ],
+            stage_theme: StageTheme::Midnight,
         }
     }
 }
@@ -156,6 +216,10 @@ struct TokenVisual {
     player: usize,
     token: usize,
     target: Vec3,
+    logical_state: TokenState,
+    segment_start: Vec3,
+    segment_progress: f32,
+    waypoints: VecDeque<Vec3>,
 }
 
 #[derive(Component)]
@@ -165,7 +229,38 @@ struct GameplayBoard;
 struct StatusText;
 
 #[derive(Component)]
-struct DiceText;
+struct DiceValueText;
+
+#[derive(Component)]
+struct DiceSubText;
+
+#[derive(Component)]
+struct ConfettiPiece {
+    velocity: Vec2,
+    spin: f32,
+    timer: Timer,
+}
+
+#[derive(Resource)]
+struct DiceAnimation {
+    timer: Timer,
+    rolling: bool,
+    last_face: Option<u8>,
+    spin_face: u8,
+    spin_tick: Timer,
+}
+
+impl Default for DiceAnimation {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(0.6, TimerMode::Once),
+            rolling: false,
+            last_face: None,
+            spin_face: 1,
+            spin_tick: Timer::from_seconds(0.06, TimerMode::Repeating),
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PlayerKind {
@@ -173,7 +268,7 @@ enum PlayerKind {
     Bot,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum TokenState {
     Yard,
     Path(u8), // 0..=56 where 56 is finished
@@ -264,14 +359,22 @@ fn setup_match(mut commands: Commands, setup: Res<MatchSetup>) {
         keyboard_selected_token: None,
         winner_order: Vec::new(),
         message:
-            "Roll the die (Space or tap 🎲). Then choose a token with 1-4, arrows+Enter, or tap."
+            "Roll the die (Space or tap DICE). Then choose a token with 1-4, arrows+Enter, or tap."
                 .into(),
-        bot_timer: Timer::from_seconds(0.65, TimerMode::Repeating),
+        bot_timer: Timer::from_seconds(0.12, TimerMode::Repeating),
         finished: false,
     });
 }
 
-fn spawn_board(mut commands: Commands) {
+fn spawn_board(
+    mut commands: Commands,
+    setup: Res<MatchSetup>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    let token_mesh = meshes.add(Circle::new(1.0));
+    let palette = stage_palette(setup.stage_theme);
+    let dice_anchor = Vec3::new(0.0, 265.0, 40.0);
     commands
         .spawn((
             Name::new("GameplayRoot"),
@@ -283,7 +386,7 @@ fn spawn_board(mut commands: Commands) {
         .with_children(|parent| {
             parent.spawn(SpriteBundle {
                 sprite: Sprite {
-                    color: Color::srgb(0.08, 0.08, 0.12),
+                    color: palette.board_bg,
                     custom_size: Some(Vec2::splat(BOARD_WORLD_SIZE)),
                     ..default()
                 },
@@ -305,7 +408,7 @@ fn spawn_board(mut commands: Commands) {
 
             parent.spawn(SpriteBundle {
                 sprite: Sprite {
-                    color: Color::srgb(0.06, 0.06, 0.11),
+                    color: palette.cross_bg,
                     custom_size: Some(Vec2::new(220.0, 560.0)),
                     ..default()
                 },
@@ -314,7 +417,7 @@ fn spawn_board(mut commands: Commands) {
             });
             parent.spawn(SpriteBundle {
                 sprite: Sprite {
-                    color: Color::srgb(0.06, 0.06, 0.11),
+                    color: palette.cross_bg,
                     custom_size: Some(Vec2::new(560.0, 220.0)),
                     ..default()
                 },
@@ -326,7 +429,7 @@ fn spawn_board(mut commands: Commands) {
             for p in &points {
                 parent.spawn(SpriteBundle {
                     sprite: Sprite {
-                        color: Color::srgb(0.2, 0.2, 0.24),
+                        color: palette.track_cell,
                         custom_size: Some(Vec2::splat(26.0)),
                         ..default()
                     },
@@ -338,7 +441,7 @@ fn spawn_board(mut commands: Commands) {
             for safe_idx in safe_track_indices() {
                 parent.spawn(SpriteBundle {
                     sprite: Sprite {
-                        color: Color::srgb(0.95, 0.95, 0.58),
+                        color: palette.safe_cell,
                         custom_size: Some(Vec2::splat(14.0)),
                         ..default()
                     },
@@ -370,12 +473,12 @@ fn spawn_board(mut commands: Commands) {
                     text: Text::from_section(
                         "",
                         TextStyle {
-                            font_size: 24.0,
+                            font_size: 18.0,
                             color: Color::WHITE,
                             ..default()
                         },
                     ),
-                    transform: Transform::from_xyz(0.0, 350.0, 12.0),
+                    transform: Transform::from_xyz(0.0, 370.0, 12.0),
                     ..default()
                 },
                 StatusText,
@@ -384,38 +487,102 @@ fn spawn_board(mut commands: Commands) {
             parent.spawn((
                 Text2dBundle {
                     text: Text::from_section(
-                        "🎲 -",
+                        "-",
                         TextStyle {
-                            font_size: 40.0,
+                            font_size: 64.0,
                             color: Color::WHITE,
                             ..default()
                         },
                     ),
-                    transform: Transform::from_xyz(300.0, 300.0, 12.0),
+                    transform: Transform::from_translation(dice_anchor),
                     ..default()
                 },
-                DiceText,
+                DiceValueText,
+            ));
+
+            parent.spawn((
+                Text2dBundle {
+                    text: Text::from_section(
+                        "",
+                        TextStyle {
+                            font_size: 28.0,
+                            color: Color::WHITE,
+                            ..default()
+                        },
+                    ),
+                    transform: Transform::from_translation(
+                        dice_anchor + Vec3::new(0.0, -56.0, 0.0),
+                    ),
+                    ..default()
+                },
+                DiceSubText,
             ));
 
             for (player, color) in PLAYER_COLORS.into_iter().enumerate() {
                 for token in 0..4 {
                     let start = yard_position(player, token);
-                    parent.spawn((
-                        SpriteBundle {
-                            sprite: Sprite {
-                                color,
-                                custom_size: Some(Vec2::splat(20.0)),
-                                ..default()
+                    parent
+                        .spawn((
+                            Transform::from_translation(start),
+                            GlobalTransform::default(),
+                            TokenVisual {
+                                player,
+                                token,
+                                target: start,
+                                logical_state: TokenState::Yard,
+                                segment_start: start,
+                                segment_progress: 0.0,
+                                waypoints: VecDeque::new(),
                             },
-                            transform: Transform::from_translation(start),
-                            ..default()
-                        },
-                        TokenVisual {
-                            player,
-                            token,
-                            target: start,
-                        },
-                    ));
+                        ))
+                        .with_children(|token_parent| {
+                            token_parent.spawn(MaterialMesh2dBundle {
+                                mesh: token_mesh.clone().into(),
+                                material: materials.add(Color::srgba(0.0, 0.0, 0.0, 0.3)),
+                                transform: Transform::from_xyz(1.0, -2.5, -0.3)
+                                    .with_scale(Vec3::splat(13.0)),
+                                ..default()
+                            });
+                            token_parent.spawn(MaterialMesh2dBundle {
+                                mesh: token_mesh.clone().into(),
+                                material: materials.add(Color::srgb(0.97, 0.97, 0.97)),
+                                transform: Transform::from_scale(Vec3::splat(11.5)),
+                                ..default()
+                            });
+                            token_parent.spawn(MaterialMesh2dBundle {
+                                mesh: token_mesh.clone().into(),
+                                material: materials.add(color),
+                                transform: Transform::from_scale(Vec3::splat(8.4)),
+                                ..default()
+                            });
+                            token_parent.spawn(MaterialMesh2dBundle {
+                                mesh: token_mesh.clone().into(),
+                                material: materials.add(Color::srgba(1.0, 1.0, 1.0, 0.35)),
+                                transform: Transform::from_xyz(-2.2, 2.1, 0.2)
+                                    .with_scale(Vec3::splat(3.0)),
+                                ..default()
+                            });
+                            token_parent.spawn(SpriteBundle {
+                                sprite: Sprite {
+                                    color: Color::srgb(0.96, 0.96, 0.96),
+                                    custom_size: Some(Vec2::new(6.8, 6.8)),
+                                    ..default()
+                                },
+                                transform: Transform::from_xyz(0.0, -8.8, 0.15)
+                                    .with_rotation(Quat::from_rotation_z(45_f32.to_radians())),
+                                ..default()
+                            });
+                            token_parent.spawn(SpriteBundle {
+                                sprite: Sprite {
+                                    color,
+                                    custom_size: Some(Vec2::new(3.8, 3.8)),
+                                    ..default()
+                                },
+                                transform: Transform::from_xyz(0.0, -8.2, 0.18)
+                                    .with_rotation(Quat::from_rotation_z(45_f32.to_radians())),
+                                ..default()
+                            });
+                        });
                 }
             }
         });
@@ -428,9 +595,18 @@ fn fit_gameplay_board_to_window(
     let Ok(window) = window_q.get_single() else {
         return;
     };
-    let target = (window.width().min(window.height()) * 0.92 / BOARD_WORLD_SIZE).clamp(0.55, 2.2);
+    let scale_from_width = window.width() * 0.98 / BOARD_WORLD_SIZE;
+    let scale_from_height = window.height() * 0.86 / BOARD_WORLD_SIZE;
+    let target = scale_from_width.min(scale_from_height).clamp(0.55, 2.2);
+    let portrait = window.height() > window.width() * 1.2;
+    let y_offset = if portrait {
+        (window.height() * 0.12) / target
+    } else {
+        0.0
+    };
     for mut transform in &mut board_q {
         transform.scale = Vec3::splat(target);
+        transform.translation = Vec3::new(0.0, y_offset, 0.0);
     }
 }
 
@@ -438,6 +614,7 @@ fn handle_roll_input(
     keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     mut game: ResMut<LudoGame>,
+    mut dice_animation: ResMut<DiceAnimation>,
     sfx: Res<GameplaySfx>,
 ) {
     if game_over(&game)
@@ -448,7 +625,8 @@ fn handle_roll_input(
     }
     if keys.just_pressed(KeyCode::Space) {
         play_sfx(&mut commands, sfx.roll.clone());
-        roll_for_current_player(&mut game);
+        let roll = roll_for_current_player(&mut game);
+        start_dice_roll_animation(&mut dice_animation, roll);
     }
 }
 
@@ -530,6 +708,7 @@ fn handle_pointer_input(
     token_q: Query<(&TokenVisual, &GlobalTransform)>,
     mut commands: Commands,
     mut game: ResMut<LudoGame>,
+    mut dice_animation: ResMut<DiceAnimation>,
     sfx: Res<GameplaySfx>,
 ) {
     if game_over(&game) || game.players[game.current].kind != PlayerKind::Human {
@@ -546,11 +725,10 @@ fn handle_pointer_input(
     };
 
     if game.last_roll.is_none() {
-        let dice_center = Vec2::new(300.0, 300.0);
-        if pointer_world.distance(dice_center) <= DICE_PICK_RADIUS {
-            play_sfx(&mut commands, sfx.roll.clone());
-            roll_for_current_player(&mut game);
-        }
+        let _ = pointer_world;
+        play_sfx(&mut commands, sfx.roll.clone());
+        let roll = roll_for_current_player(&mut game);
+        start_dice_roll_animation(&mut dice_animation, roll);
         return;
     }
 
@@ -568,9 +746,15 @@ fn run_bot_turn(
     time: Res<Time>,
     mut commands: Commands,
     mut game: ResMut<LudoGame>,
+    mut dice_animation: ResMut<DiceAnimation>,
     sfx: Res<GameplaySfx>,
 ) {
     if game_over(&game) || game.players[game.current].kind != PlayerKind::Bot {
+        return;
+    }
+
+    if dice_animation.rolling {
+        game.bot_timer.reset();
         return;
     }
 
@@ -581,7 +765,8 @@ fn run_bot_turn(
 
     if game.last_roll.is_none() {
         play_sfx(&mut commands, sfx.roll.clone());
-        roll_for_current_player(&mut game);
+        let roll = roll_for_current_player(&mut game);
+        start_dice_roll_animation(&mut dice_animation, roll);
     } else if let Some(token) =
         pick_bot_move(&game, game.current, game.selectable_tokens.as_slice())
     {
@@ -647,7 +832,7 @@ fn score_move(
     }
 }
 
-fn roll_for_current_player(game: &mut LudoGame) {
+fn roll_for_current_player(game: &mut LudoGame) -> u8 {
     let roll = rand::thread_rng().gen_range(1..=6);
     game.last_roll = Some(roll);
 
@@ -660,7 +845,7 @@ fn roll_for_current_player(game: &mut LudoGame) {
             );
             game.last_roll = None;
             end_turn(game, false);
-            return;
+            return roll;
         }
     }
 
@@ -674,7 +859,7 @@ fn roll_for_current_player(game: &mut LudoGame) {
         game.last_roll = None;
         game.keyboard_selected_token = None;
         end_turn(game, roll == 6);
-        return;
+        return roll;
     }
 
     game.message = if game.players[game.current].kind == PlayerKind::Human {
@@ -694,6 +879,16 @@ fn roll_for_current_player(game: &mut LudoGame) {
             game.players[game.current].strategy.label()
         )
     };
+
+    roll
+}
+
+fn start_dice_roll_animation(dice_animation: &mut DiceAnimation, roll: u8) {
+    dice_animation.rolling = true;
+    dice_animation.last_face = Some(roll);
+    dice_animation.spin_face = rand::thread_rng().gen_range(1..=6);
+    dice_animation.timer.reset();
+    dice_animation.spin_tick.reset();
 }
 
 fn apply_move(game: &mut LudoGame, token_index: usize, commands: &mut Commands, sfx: &GameplaySfx) {
@@ -754,11 +949,24 @@ fn apply_move(game: &mut LudoGame, token_index: usize, commands: &mut Commands, 
 
     if capture_happened {
         play_sfx(commands, sfx.capture.clone());
+        game.message = format!(
+            "{} captured a token and earned another roll!",
+            game.players[player].name
+        );
+    }
+
+    let reached_home = landed_path == Some(56);
+    if reached_home {
+        game.message = format!(
+            "{} reached home and earned another roll!",
+            game.players[player].name
+        );
     }
 
     if player_finished(&game.players[player]) && !game.winner_order.contains(&player) {
         game.winner_order.push(player);
         play_sfx(commands, sfx.win.clone());
+        spawn_confetti(commands);
         game.message = format!(
             "{} finished at place {}!",
             game.players[player].name,
@@ -766,7 +974,7 @@ fn apply_move(game: &mut LudoGame, token_index: usize, commands: &mut Commands, 
         );
     }
 
-    end_turn(game, roll == 6);
+    end_turn(game, roll == 6 || capture_happened || reached_home);
 }
 
 fn end_turn(game: &mut LudoGame, mut extra_turn: bool) {
@@ -813,35 +1021,47 @@ fn sync_token_targets(game: Res<LudoGame>, mut query: Query<&mut TokenVisual>) {
     for mut token_visual in &mut query {
         let player = token_visual.player;
         let token = token_visual.token;
-        let state = game.players[player].tokens[token];
-        token_visual.target = match state {
-            TokenState::Yard => yard_position(player, token),
-            TokenState::Path(path) if path <= 50 => {
-                let track = absolute_track_index(player, path);
-                points[track as usize] + Vec3::new((token as f32 - 1.5) * 4.0, 0.0, 2.0)
-            }
-            TokenState::Path(path) => home_position(player, path),
-        };
+        let new_state = game.players[player].tokens[token];
+        token_visual.target = token_position_for_state(player, token, new_state, &points);
+
+        if token_visual.logical_state != new_state {
+            token_visual.waypoints = VecDeque::from(movement_waypoints(
+                player,
+                token,
+                token_visual.logical_state,
+                new_state,
+                &points,
+            ));
+            token_visual.segment_progress = 0.0;
+            token_visual.segment_start = token_visual.target;
+            token_visual.logical_state = new_state;
+        }
     }
 }
 
 fn update_token_visual_state(
     game: Res<LudoGame>,
-    mut token_query: Query<(&TokenVisual, &mut Sprite)>,
+    time: Res<Time>,
+    mut token_query: Query<(&TokenVisual, &mut Transform)>,
 ) {
-    for (token_visual, mut sprite) in &mut token_query {
+    for (token_visual, mut transform) in &mut token_query {
         let is_current = token_visual.player == game.current;
         let is_selectable = game.selectable_tokens.contains(&token_visual.token) && is_current;
         let is_selected = game.keyboard_selected_token == Some(token_visual.token) && is_selectable;
 
-        let size = if is_selected {
-            30.0
+        let scale = if is_selected {
+            1.6
         } else if is_selectable {
-            25.0
+            1.35
         } else {
-            20.0
+            1.0
         };
-        sprite.custom_size = Some(Vec2::splat(size));
+        let pulse = if is_selectable {
+            1.0 + (time.elapsed_seconds() * 8.0).sin().abs() * 0.1
+        } else {
+            1.0
+        };
+        transform.scale = Vec3::splat(scale * pulse);
     }
 }
 
@@ -896,10 +1116,52 @@ fn nearest_selectable_token(
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map(|(token, _)| token)
 }
-fn animate_token_transforms(time: Res<Time>, mut query: Query<(&TokenVisual, &mut Transform)>) {
-    let speed = (time.delta_seconds() * 9.0).clamp(0.0, 1.0);
-    for (token, mut transform) in &mut query {
-        transform.translation = transform.translation.lerp(token.target, speed);
+fn animate_token_transforms(time: Res<Time>, mut query: Query<(&mut TokenVisual, &mut Transform)>) {
+    for (mut token, mut transform) in &mut query {
+        if let Some(next_stop) = token.waypoints.front().copied() {
+            if token.segment_start == token.target {
+                token.segment_start = transform.translation;
+            }
+
+            let duration = (token.segment_start.distance(next_stop) / 210.0).max(0.08);
+            token.segment_progress =
+                (token.segment_progress + time.delta_seconds() / duration).clamp(0.0, 1.0);
+
+            let mut position = token.segment_start.lerp(next_stop, token.segment_progress);
+            position.y += (PI * token.segment_progress).sin() * 14.0;
+            transform.translation = position;
+
+            if token.segment_progress >= 1.0 {
+                transform.translation = next_stop;
+                token.segment_start = next_stop;
+                token.segment_progress = 0.0;
+                token.waypoints.pop_front();
+            }
+        } else {
+            let speed = (time.delta_seconds() * 9.0).clamp(0.0, 1.0);
+            transform.translation = transform.translation.lerp(token.target, speed);
+            token.segment_start = transform.translation;
+        }
+    }
+}
+
+fn animate_confetti(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut Sprite, &mut ConfettiPiece)>,
+) {
+    for (entity, mut transform, mut sprite, mut confetti) in &mut query {
+        confetti.timer.tick(time.delta());
+        confetti.velocity.y -= 520.0 * time.delta_seconds();
+        transform.translation += (confetti.velocity * time.delta_seconds()).extend(0.0);
+        transform.rotate_z(confetti.spin * time.delta_seconds());
+
+        let life = 1.0 - confetti.timer.fraction();
+        sprite.color.set_alpha(life.clamp(0.0, 1.0));
+
+        if confetti.timer.finished() {
+            commands.entity(entity).despawn_recursive();
+        }
     }
 }
 
@@ -934,7 +1196,7 @@ fn update_status_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With
     };
 
     text.sections[0].value = format!(
-        "{}\nTurn: {} ({}) | Last roll: {} | Winners: {}\nControls: Space/Tap 🎲=Roll, 1-4 or Arrows+Enter/Space or Tap token=Move, Esc=Title",
+        "Now: {}\nTurn: {} ({})   Last roll: {}\nWinners: {}\nControls: Space/Tap DICE roll | 1-4 or Arrows pick | Enter/Tap move | Esc title",
         game.message,
         game.players[game.current].name,
         if game.players[game.current].kind == PlayerKind::Human {
@@ -947,16 +1209,147 @@ fn update_status_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With
     );
 }
 
-fn update_dice_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With<DiceText>>) {
-    let Ok(mut text) = text_query.get_single_mut() else {
+fn update_dice_text(
+    time: Res<Time>,
+    game: Res<LudoGame>,
+    mut dice_animation: ResMut<DiceAnimation>,
+    mut value_query: Query<
+        (&mut Text, &mut Transform),
+        (With<DiceValueText>, Without<DiceSubText>),
+    >,
+    mut sub_query: Query<&mut Text, (With<DiceSubText>, Without<DiceValueText>)>,
+) {
+    let Ok((mut value_text, mut value_transform)) = value_query.get_single_mut() else {
+        return;
+    };
+    let Ok(mut sub_text) = sub_query.get_single_mut() else {
         return;
     };
 
-    let face = game
-        .last_roll
-        .map(|roll| roll.to_string())
-        .unwrap_or_else(|| "-".into());
-    text.sections[0].value = format!("🎲 {}", face);
+    let face = if dice_animation.rolling {
+        dice_animation.timer.tick(time.delta());
+        dice_animation.spin_tick.tick(time.delta());
+        if dice_animation.spin_tick.just_finished() {
+            let mut rng = rand::thread_rng();
+            let mut next = rng.gen_range(1..=6);
+            if next == dice_animation.spin_face {
+                next = (next % 6) + 1;
+            }
+            dice_animation.spin_face = next;
+        }
+        value_transform.rotation = Quat::from_rotation_z(time.elapsed_seconds() * 11.0);
+        value_transform.scale =
+            Vec3::splat(1.0 + (time.elapsed_seconds() * 12.0).sin().abs() * 0.16);
+
+        if dice_animation.timer.finished() {
+            dice_animation.rolling = false;
+            value_transform.rotation = Quat::IDENTITY;
+            value_transform.scale = Vec3::ONE;
+            dice_animation.last_face.unwrap_or(dice_animation.spin_face)
+        } else {
+            dice_animation.spin_face
+        }
+    } else {
+        value_transform.rotation = Quat::IDENTITY;
+        value_transform.scale = Vec3::ONE;
+        game.last_roll
+            .or(dice_animation.last_face)
+            .unwrap_or_default()
+    };
+
+    let sub_header = if face == 6 && game.last_roll == Some(6) {
+        "Bonus roll!".to_string()
+    } else if game.last_roll.is_some() {
+        "Choose a token".to_string()
+    } else {
+        format!("{}'s turn", game.players[game.current].name)
+    };
+
+    value_text.sections[0].value = if face == 0 {
+        "-".to_string()
+    } else {
+        face.to_string()
+    };
+    sub_text.sections[0].value = sub_header;
+}
+
+fn token_position_for_state(
+    player: usize,
+    token: usize,
+    state: TokenState,
+    points: &[Vec3],
+) -> Vec3 {
+    match state {
+        TokenState::Yard => yard_position(player, token),
+        TokenState::Path(path) if path <= 50 => {
+            let track = absolute_track_index(player, path);
+            points[track as usize] + Vec3::new((token as f32 - 1.5) * 4.0, 0.0, 2.0)
+        }
+        TokenState::Path(path) => home_position(player, path),
+    }
+}
+
+fn movement_waypoints(
+    player: usize,
+    token: usize,
+    from: TokenState,
+    to: TokenState,
+    points: &[Vec3],
+) -> Vec<Vec3> {
+    match (from, to) {
+        (TokenState::Yard, TokenState::Path(0)) => {
+            vec![token_position_for_state(player, token, to, points)]
+        }
+        (TokenState::Path(from_path), TokenState::Path(to_path)) if to_path > from_path => {
+            let mut path_points = Vec::new();
+            for step in (from_path + 1)..=to_path {
+                path_points.push(token_position_for_state(
+                    player,
+                    token,
+                    TokenState::Path(step),
+                    points,
+                ));
+            }
+            path_points
+        }
+        (_, TokenState::Yard) => vec![yard_position(player, token)],
+        _ => vec![token_position_for_state(player, token, to, points)],
+    }
+}
+
+fn spawn_confetti(commands: &mut Commands) {
+    let mut rng = rand::thread_rng();
+    let confetti_colors = [
+        Color::srgb(0.98, 0.2, 0.2),
+        Color::srgb(0.2, 0.9, 0.3),
+        Color::srgb(0.95, 0.82, 0.2),
+        Color::srgb(0.2, 0.55, 0.98),
+        Color::srgb(1.0, 0.58, 0.18),
+        Color::srgb(0.93, 0.35, 0.96),
+    ];
+
+    for _ in 0..70 {
+        let color = confetti_colors[rng.gen_range(0..confetti_colors.len())];
+        let velocity = Vec2::new(rng.gen_range(-260.0..260.0), rng.gen_range(130.0..420.0));
+        let size = rng.gen_range(5.0..10.0);
+        commands.spawn((
+            StateScoped(Screen::Gameplay),
+            SpriteBundle {
+                sprite: Sprite {
+                    color,
+                    custom_size: Some(Vec2::splat(size)),
+                    ..default()
+                },
+                transform: Transform::from_xyz(0.0, 0.0, 60.0),
+                ..default()
+            },
+            ConfettiPiece {
+                velocity,
+                spin: rng.gen_range(-8.0..8.0),
+                timer: Timer::from_seconds(rng.gen_range(0.8..1.6), TimerMode::Once),
+            },
+        ));
+    }
 }
 
 fn game_over(game: &LudoGame) -> bool {
