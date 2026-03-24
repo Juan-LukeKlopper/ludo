@@ -469,52 +469,35 @@ fn spawn_board(
             }
 
             parent.spawn((
-                Text2dBundle {
-                    text: Text::from_section(
-                        "",
-                        TextStyle {
-                            font_size: 18.0,
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                    ),
-                    transform: Transform::from_xyz(0.0, 370.0, 12.0),
+                Text2d::new(""),
+                TextFont {
+                    font_size: 18.0,
                     ..default()
                 },
+                TextColor(Color::WHITE),
+                Transform::from_xyz(0.0, 370.0, 12.0),
                 StatusText,
             ));
 
             parent.spawn((
-                Text2dBundle {
-                    text: Text::from_section(
-                        "-",
-                        TextStyle {
-                            font_size: 64.0,
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                    ),
-                    transform: Transform::from_translation(dice_anchor),
+                Text2d::new("-"),
+                TextFont {
+                    font_size: 64.0,
                     ..default()
                 },
+                TextColor(Color::WHITE),
+                Transform::from_translation(dice_anchor),
                 DiceValueText,
             ));
 
             parent.spawn((
-                Text2dBundle {
-                    text: Text::from_section(
-                        "",
-                        TextStyle {
-                            font_size: 28.0,
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                    ),
-                    transform: Transform::from_translation(
-                        dice_anchor + Vec3::new(0.0, -56.0, 0.0),
-                    ),
+                Text2d::new(""),
+                TextFont {
+                    font_size: 28.0,
                     ..default()
                 },
+                TextColor(Color::WHITE),
+                Transform::from_translation(dice_anchor + Vec3::new(0.0, -56.0, 0.0)),
                 DiceSubText,
             ));
 
@@ -1195,7 +1178,7 @@ fn update_status_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With
             .join(" > ")
     };
 
-    text.sections[0].value = format!(
+    text.0 = format!(
         "Now: {}\nTurn: {} ({})   Last roll: {}\nWinners: {}\nControls: Space/Tap DICE roll | 1-4 or Arrows pick | Enter/Tap move | Esc title",
         game.message,
         game.players[game.current].name,
@@ -1265,12 +1248,12 @@ fn update_dice_text(
         format!("{}'s turn", game.players[game.current].name)
     };
 
-    value_text.sections[0].value = if face == 0 {
+    value_text.0 = if face == 0 {
         "-".to_string()
     } else {
         face.to_string()
     };
-    sub_text.sections[0].value = sub_header;
+    sub_text.0 = sub_header;
 }
 
 fn token_position_for_state(
@@ -1593,10 +1576,8 @@ fn play_gameplay_music(mut commands: Commands, mut music: ResMut<GameplayMusic>)
     music.entity = Some(
         commands
             .spawn((
-                AudioBundle {
-                    source: music.handle.clone(),
-                    settings: PlaybackSettings::LOOP,
-                },
+                AudioPlayer::new(music.handle.clone()),
+                PlaybackSettings::LOOP,
                 Music,
             ))
             .id(),
@@ -1611,10 +1592,8 @@ fn stop_music(mut commands: Commands, mut music: ResMut<GameplayMusic>) {
 
 fn play_sfx(commands: &mut Commands, handle: Handle<AudioSource>) {
     commands.spawn((
-        AudioBundle {
-            source: handle,
-            settings: PlaybackSettings::DESPAWN,
-        },
+        AudioPlayer::new(handle),
+        PlaybackSettings::DESPAWN,
         SoundEffect,
     ));
 }

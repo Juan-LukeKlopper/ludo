@@ -83,10 +83,8 @@ fn trigger_step_sound_effect(
             let rng = &mut rand::thread_rng();
             let random_step = player_assets.steps.choose(rng).unwrap();
             commands.spawn((
-                AudioBundle {
-                    source: random_step.clone(),
-                    settings: PlaybackSettings::DESPAWN,
-                },
+                AudioPlayer::new(random_step.clone()),
+                PlaybackSettings::DESPAWN,
                 SoundEffect,
             ));
         }

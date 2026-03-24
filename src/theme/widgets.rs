@@ -40,14 +40,12 @@ impl<T: Spawn> Widgets for T {
         entity.with_children(|children| {
             children.spawn((
                 Name::new("Button Text"),
-                TextBundle::from_section(
-                    text,
-                    TextStyle {
-                        font_size: 40.0,
-                        color: BUTTON_TEXT,
-                        ..default()
-                    },
-                ),
+                Text::new(text),
+                TextFont {
+                    font_size: 40.0,
+                    ..default()
+                },
+                TextColor(BUTTON_TEXT),
             ));
         });
 
@@ -72,14 +70,12 @@ impl<T: Spawn> Widgets for T {
         entity.with_children(|children| {
             children.spawn((
                 Name::new("Header Text"),
-                TextBundle::from_section(
-                    text,
-                    TextStyle {
-                        font_size: 40.0,
-                        color: HEADER_TEXT,
-                        ..default()
-                    },
-                ),
+                Text::new(text),
+                TextFont {
+                    font_size: 40.0,
+                    ..default()
+                },
+                TextColor(HEADER_TEXT),
             ));
         });
         entity
@@ -88,18 +84,16 @@ impl<T: Spawn> Widgets for T {
     fn label(&mut self, text: impl Into<String>) -> EntityCommands<'_> {
         let entity = self.spawn((
             Name::new("Label"),
-            TextBundle::from_section(
-                text,
-                TextStyle {
-                    font_size: 24.0,
-                    color: LABEL_TEXT,
-                    ..default()
-                },
-            )
-            .with_style(Style {
+            Text::new(text),
+            TextFont {
+                font_size: 24.0,
+                ..default()
+            },
+            TextColor(LABEL_TEXT),
+            Node {
                 width: Px(500.0),
                 ..default()
-            }),
+            },
         ));
         entity
     }

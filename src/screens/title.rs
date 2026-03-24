@@ -107,53 +107,47 @@ fn spawn_title_screen(mut commands: Commands) {
                     ..default()
                 })
                 .with_children(|panel| {
-                    panel.spawn(TextBundle::from_section(
-                        "🎲 Ludo King V1",
-                        TextStyle {
+                    panel.spawn((
+                        Text::new("🎲 Ludo King V1"),
+                        TextFont {
                             font_size: 34.0,
-                            color: HEADER_TEXT,
                             ..default()
                         },
-                    ));
-                    panel.spawn(TextBundle::from_section(
-                        "Build your lobby, then hit Start Game.",
-                        TextStyle {
-                            font_size: 18.0,
-                            color: LABEL_TEXT,
-                            ..default()
-                        },
+                        TextColor(HEADER_TEXT),
                     ));
                     panel.spawn((
-                        TextBundle::from_section(
-                            "",
-                            TextStyle {
-                                font_size: 16.0,
-                                color: LABEL_TEXT,
-                                ..default()
-                            },
-                        ),
+                        Text::new("Build your lobby, then hit Start Game."),
+                        TextFont {
+                            font_size: 18.0,
+                            ..default()
+                        },
+                        TextColor(LABEL_TEXT),
+                    ));
+                    panel.spawn((
+                        Text::new(""),
+                        TextFont {
+                            font_size: 16.0,
+                            ..default()
+                        },
+                        TextColor(LABEL_TEXT),
                         SeatPageLabel,
                     ));
                     panel.spawn((
-                        TextBundle::from_section(
-                            "",
-                            TextStyle {
-                                font_size: 14.0,
-                                color: Color::srgb(0.85, 0.93, 1.0),
-                                ..default()
-                            },
-                        ),
+                        Text::new(""),
+                        TextFont {
+                            font_size: 14.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.85, 0.93, 1.0)),
                         NameEditHint,
                     ));
                     panel.spawn((
-                        TextBundle::from_section(
-                            "",
-                            TextStyle {
-                                font_size: 14.0,
-                                color: Color::srgb(1.0, 0.92, 0.7),
-                                ..default()
-                            },
-                        ),
+                        Text::new(""),
+                        TextFont {
+                            font_size: 14.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(1.0, 0.92, 0.7)),
                         ThemeLabel,
                     ));
 
@@ -207,14 +201,12 @@ fn spawn_title_screen(mut commands: Commands) {
                                     ))
                                     .with_children(|seat_panel| {
                                         seat_panel.spawn((
-                                            TextBundle::from_section(
-                                                "",
-                                                TextStyle {
-                                                    font_size: 20.0,
-                                                    color: Color::WHITE,
-                                                    ..default()
-                                                },
-                                            ),
+                                            Text::new(""),
+                                            TextFont {
+                                                font_size: 20.0,
+                                                ..default()
+                                            },
+                                            TextColor(Color::WHITE),
                                             SeatSummary(seat),
                                         ));
 
@@ -307,13 +299,13 @@ fn action_btn(parent: &mut ChildBuilder, text: impl Into<String>, action: SeatAc
             ActionButton(action),
         ))
         .with_children(|children| {
-            children.spawn(TextBundle::from_section(
-                text,
-                TextStyle {
+            children.spawn((
+                Text::new(text),
+                TextFont {
                     font_size: 14.0,
-                    color: BUTTON_TEXT,
                     ..default()
                 },
+                TextColor(BUTTON_TEXT),
             ));
         });
 }
@@ -330,7 +322,7 @@ fn refresh_seat_summaries(
         } else {
             ""
         };
-        text.sections[0].value = format!(
+        text.0 = format!(
             "Seat {}{} | {} | Name: {} | Bot: {}",
             seat.0 + 1,
             editing,
@@ -347,7 +339,7 @@ fn refresh_name_edit_hint(
     mut labels: Query<&mut Text, With<NameEditHint>>,
 ) {
     for mut text in &mut labels {
-        text.sections[0].value = format!(
+        text.0 = format!(
             "Typing Seat {} name ({}). Keyboard input, Backspace=delete, Delete=clear.",
             name_edit.seat + 1,
             setup.seats[name_edit.seat].name
@@ -357,7 +349,7 @@ fn refresh_name_edit_hint(
 
 fn refresh_theme_label(setup: Res<MatchSetup>, mut labels: Query<&mut Text, With<ThemeLabel>>) {
     for mut text in &mut labels {
-        text.sections[0].value = format!(
+        text.0 = format!(
             "Current stage theme: {} (tap Stage Theme to cycle)",
             setup.stage_theme.label()
         );
@@ -373,7 +365,7 @@ fn refresh_seat_page_ui(
     let end = (start + 2).min(4);
 
     for mut text in &mut page_label {
-        text.sections[0].value = format!("Showing seats {}-{}", start + 1, end);
+        text.0 = format!("Showing seats {}-{}", start + 1, end);
     }
 
     for (seat_panel, mut visibility) in &mut seat_panels {
