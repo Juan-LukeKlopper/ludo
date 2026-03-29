@@ -4,8 +4,8 @@
 
 use bevy::{
     ecs::{system::RunSystemOnce as _, world::Command},
+    image::{ImageLoaderSettings, ImageSampler},
     prelude::*,
-    render::texture::{ImageLoaderSettings, ImageSampler},
 };
 
 use crate::{
@@ -64,15 +64,14 @@ fn spawn_player(
     commands.spawn((
         Name::new("Player"),
         Player,
-        SpriteBundle {
-            texture: player_assets.ducky.clone(),
-            transform: Transform::from_scale(Vec2::splat(8.0).extend(1.0)),
-            ..Default::default()
-        },
-        TextureAtlas {
-            layout: texture_atlas_layout.clone(),
-            index: player_animation.get_atlas_index(),
-        },
+        Sprite::from_atlas_image(
+            player_assets.ducky.clone(),
+            TextureAtlas {
+                layout: texture_atlas_layout.clone(),
+                index: player_animation.get_atlas_index(),
+            },
+        ),
+        Transform::from_scale(Vec2::splat(8.0).extend(1.0)),
         MovementController {
             max_speed: config.max_speed,
             ..default()

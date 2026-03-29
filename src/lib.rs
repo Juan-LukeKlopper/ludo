@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 mod asset_tracking;
 pub mod audio;
 mod demo;

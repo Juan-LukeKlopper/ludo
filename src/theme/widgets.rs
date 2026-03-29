@@ -21,7 +21,7 @@ impl<T: Spawn> Widgets for T {
         let mut entity = self.spawn((
             Name::new("Button"),
             ButtonBundle {
-                style: Style {
+                node: Node {
                     width: Px(200.0),
                     height: Px(65.0),
                     justify_content: JustifyContent::Center,
@@ -56,7 +56,7 @@ impl<T: Spawn> Widgets for T {
         let mut entity = self.spawn((
             Name::new("Header"),
             NodeBundle {
-                style: Style {
+                node: Node {
                     width: Px(500.0),
                     height: Px(65.0),
                     justify_content: JustifyContent::Center,
@@ -111,7 +111,7 @@ impl Containers for Commands<'_, '_> {
         self.spawn((
             Name::new("UI Root"),
             NodeBundle {
-                style: Style {
+                node: Node {
                     width: Percent(100.0),
                     height: Percent(100.0),
                     justify_content: JustifyContent::Center,

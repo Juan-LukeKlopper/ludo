@@ -60,10 +60,12 @@ fn update_animation_timer(time: Res<Time>, mut query: Query<&mut PlayerAnimation
 }
 
 /// Update the texture atlas to reflect changes in the animation.
-fn update_animation_atlas(mut query: Query<(&PlayerAnimation, &mut TextureAtlas)>) {
-    for (animation, mut atlas) in &mut query {
+fn update_animation_atlas(mut query: Query<(&PlayerAnimation, &mut Sprite)>) {
+    for (animation, mut sprite) in &mut query {
         if animation.changed() {
-            atlas.index = animation.get_atlas_index();
+            if let Some(atlas) = &mut sprite.texture_atlas {
+                atlas.index = animation.get_atlas_index();
+            }
         }
     }
 }

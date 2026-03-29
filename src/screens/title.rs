@@ -95,7 +95,7 @@ fn spawn_title_screen(mut commands: Commands) {
         .with_children(|children| {
             children
                 .spawn(NodeBundle {
-                    style: Style {
+                    node: Node {
                         width: Percent(100.0),
                         height: Percent(100.0),
                         padding: UiRect::all(Px(18.0)),
@@ -153,7 +153,7 @@ fn spawn_title_screen(mut commands: Commands) {
 
                     panel
                         .spawn(NodeBundle {
-                            style: Style {
+                            node: Node {
                                 width: Percent(100.0),
                                 flex_wrap: FlexWrap::Wrap,
                                 column_gap: Px(8.0),
@@ -169,7 +169,7 @@ fn spawn_title_screen(mut commands: Commands) {
 
                     panel
                         .spawn(NodeBundle {
-                            style: Style {
+                            node: Node {
                                 width: Percent(100.0),
                                 flex_wrap: FlexWrap::Wrap,
                                 column_gap: Px(10.0),
@@ -183,7 +183,7 @@ fn spawn_title_screen(mut commands: Commands) {
                                 seat_grid
                                     .spawn((
                                         NodeBundle {
-                                            style: Style {
+                                            node: Node {
                                                 flex_grow: 1.0,
                                                 width: Percent(48.0),
                                                 min_width: Px(320.0),
@@ -212,7 +212,7 @@ fn spawn_title_screen(mut commands: Commands) {
 
                                         seat_panel
                                             .spawn(NodeBundle {
-                                                style: Style {
+                                                node: Node {
                                                     width: Percent(100.0),
                                                     flex_wrap: FlexWrap::Wrap,
                                                     row_gap: Px(8.0),
@@ -249,7 +249,7 @@ fn spawn_title_screen(mut commands: Commands) {
 
                     panel
                         .spawn(NodeBundle {
-                            style: Style {
+                            node: Node {
                                 width: Percent(100.0),
                                 flex_wrap: FlexWrap::Wrap,
                                 column_gap: Px(8.0),
@@ -279,7 +279,7 @@ fn action_btn(parent: &mut ChildBuilder, text: impl Into<String>, action: SeatAc
     parent
         .spawn((
             ButtonBundle {
-                style: Style {
+                node: Node {
                     flex_grow: 1.0,
                     min_width: Px(190.0),
                     min_height: Px(34.0),
