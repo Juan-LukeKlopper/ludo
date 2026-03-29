@@ -42,7 +42,7 @@ pub struct SpawnPlayer {
 
 impl Command for SpawnPlayer {
     fn apply(self, world: &mut World) {
-        world.run_system_once_with(self, spawn_player);
+        let _ = world.run_system_once_with(self, spawn_player);
     }
 }
 
