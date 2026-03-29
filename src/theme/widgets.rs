@@ -16,12 +16,12 @@ pub trait Widgets {
     fn label(&mut self, text: impl Into<String>) -> EntityCommands<'_>;
 }
 
-impl<T: Spawn> Widgets for T {
+impl Widgets for Commands<'_, '_> {
     fn button(&mut self, text: impl Into<String>) -> EntityCommands<'_> {
         let mut entity = self.spawn((
             Name::new("Button"),
             ButtonBundle {
-                style: Style {
+                node: Node {
                     width: Px(200.0),
                     height: Px(65.0),
                     justify_content: JustifyContent::Center,
@@ -40,14 +40,12 @@ impl<T: Spawn> Widgets for T {
         entity.with_children(|children| {
             children.spawn((
                 Name::new("Button Text"),
-                TextBundle::from_section(
-                    text,
-                    TextStyle {
-                        font_size: 40.0,
-                        color: BUTTON_TEXT,
-                        ..default()
-                    },
-                ),
+                Text::new(text),
+                TextFont {
+                    font_size: 40.0,
+                    ..default()
+                },
+                TextColor(BUTTON_TEXT),
             ));
         });
 
@@ -58,7 +56,7 @@ impl<T: Spawn> Widgets for T {
         let mut entity = self.spawn((
             Name::new("Header"),
             NodeBundle {
-                style: Style {
+                node: Node {
                     width: Px(500.0),
                     height: Px(65.0),
                     justify_content: JustifyContent::Center,
@@ -72,14 +70,12 @@ impl<T: Spawn> Widgets for T {
         entity.with_children(|children| {
             children.spawn((
                 Name::new("Header Text"),
-                TextBundle::from_section(
-                    text,
-                    TextStyle {
-                        font_size: 40.0,
-                        color: HEADER_TEXT,
-                        ..default()
-                    },
-                ),
+                Text::new(text),
+                TextFont {
+                    font_size: 40.0,
+                    ..default()
+                },
+                TextColor(HEADER_TEXT),
             ));
         });
         entity
@@ -88,18 +84,99 @@ impl<T: Spawn> Widgets for T {
     fn label(&mut self, text: impl Into<String>) -> EntityCommands<'_> {
         let entity = self.spawn((
             Name::new("Label"),
-            TextBundle::from_section(
-                text,
-                TextStyle {
-                    font_size: 24.0,
-                    color: LABEL_TEXT,
-                    ..default()
-                },
-            )
-            .with_style(Style {
+            Text::new(text),
+            TextFont {
+                font_size: 24.0,
+                ..default()
+            },
+            TextColor(LABEL_TEXT),
+            Node {
                 width: Px(500.0),
                 ..default()
-            }),
+            },
+        ));
+        entity
+    }
+}
+
+impl Widgets for ChildBuilder<'_> {
+    fn button(&mut self, text: impl Into<String>) -> EntityCommands<'_> {
+        let mut entity = self.spawn((
+            Name::new("Button"),
+            ButtonBundle {
+                node: Node {
+                    width: Px(200.0),
+                    height: Px(65.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                background_color: BackgroundColor(NODE_BACKGROUND),
+                ..default()
+            },
+            InteractionPalette {
+                none: NODE_BACKGROUND,
+                hovered: BUTTON_HOVERED_BACKGROUND,
+                pressed: BUTTON_PRESSED_BACKGROUND,
+            },
+        ));
+        entity.with_children(|children| {
+            children.spawn((
+                Name::new("Button Text"),
+                Text::new(text),
+                TextFont {
+                    font_size: 40.0,
+                    ..default()
+                },
+                TextColor(BUTTON_TEXT),
+            ));
+        });
+
+        entity
+    }
+
+    fn header(&mut self, text: impl Into<String>) -> EntityCommands<'_> {
+        let mut entity = self.spawn((
+            Name::new("Header"),
+            NodeBundle {
+                node: Node {
+                    width: Px(500.0),
+                    height: Px(65.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                background_color: BackgroundColor(NODE_BACKGROUND),
+                ..default()
+            },
+        ));
+        entity.with_children(|children| {
+            children.spawn((
+                Name::new("Header Text"),
+                Text::new(text),
+                TextFont {
+                    font_size: 40.0,
+                    ..default()
+                },
+                TextColor(HEADER_TEXT),
+            ));
+        });
+        entity
+    }
+
+    fn label(&mut self, text: impl Into<String>) -> EntityCommands<'_> {
+        let entity = self.spawn((
+            Name::new("Label"),
+            Text::new(text),
+            TextFont {
+                font_size: 24.0,
+                ..default()
+            },
+            TextColor(LABEL_TEXT),
+            Node {
+                width: Px(500.0),
+                ..default()
+            },
         ));
         entity
     }
@@ -117,7 +194,7 @@ impl Containers for Commands<'_, '_> {
         self.spawn((
             Name::new("UI Root"),
             NodeBundle {
-                style: Style {
+                node: Node {
                     width: Percent(100.0),
                     height: Percent(100.0),
                     justify_content: JustifyContent::Center,
@@ -130,25 +207,5 @@ impl Containers for Commands<'_, '_> {
                 ..default()
             },
         ))
-    }
-}
-
-/// An internal trait for types that can spawn entities.
-/// This is here so that [`Widgets`] can be implemented on all types that
-/// are able to spawn entities.
-/// Ideally, this trait should be [part of Bevy itself](https://github.com/bevyengine/bevy/issues/14231).
-trait Spawn {
-    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands<'_>;
-}
-
-impl Spawn for Commands<'_, '_> {
-    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands<'_> {
-        self.spawn(bundle)
-    }
-}
-
-impl Spawn for ChildBuilder<'_> {
-    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands<'_> {
-        self.spawn(bundle)
     }
 }

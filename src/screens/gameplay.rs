@@ -469,52 +469,35 @@ fn spawn_board(
             }
 
             parent.spawn((
-                Text2dBundle {
-                    text: Text::from_section(
-                        "",
-                        TextStyle {
-                            font_size: 18.0,
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                    ),
-                    transform: Transform::from_xyz(0.0, 370.0, 12.0),
+                Text2d::new(""),
+                TextFont {
+                    font_size: 18.0,
                     ..default()
                 },
+                TextColor(Color::WHITE),
+                Transform::from_xyz(0.0, 370.0, 12.0),
                 StatusText,
             ));
 
             parent.spawn((
-                Text2dBundle {
-                    text: Text::from_section(
-                        "-",
-                        TextStyle {
-                            font_size: 64.0,
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                    ),
-                    transform: Transform::from_translation(dice_anchor),
+                Text2d::new("-"),
+                TextFont {
+                    font_size: 64.0,
                     ..default()
                 },
+                TextColor(Color::WHITE),
+                Transform::from_translation(dice_anchor),
                 DiceValueText,
             ));
 
             parent.spawn((
-                Text2dBundle {
-                    text: Text::from_section(
-                        "",
-                        TextStyle {
-                            font_size: 28.0,
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                    ),
-                    transform: Transform::from_translation(
-                        dice_anchor + Vec3::new(0.0, -56.0, 0.0),
-                    ),
+                Text2d::new(""),
+                TextFont {
+                    font_size: 28.0,
                     ..default()
                 },
+                TextColor(Color::WHITE),
+                Transform::from_translation(dice_anchor + Vec3::new(0.0, -56.0, 0.0)),
                 DiceSubText,
             ));
 
@@ -538,26 +521,32 @@ fn spawn_board(
                         .with_children(|token_parent| {
                             token_parent.spawn(MaterialMesh2dBundle {
                                 mesh: token_mesh.clone().into(),
-                                material: materials.add(Color::srgba(0.0, 0.0, 0.0, 0.3)),
+                                material: MeshMaterial2d(
+                                    materials.add(Color::srgba(0.0, 0.0, 0.0, 0.3)),
+                                ),
                                 transform: Transform::from_xyz(1.0, -2.5, -0.3)
                                     .with_scale(Vec3::splat(13.0)),
                                 ..default()
                             });
                             token_parent.spawn(MaterialMesh2dBundle {
                                 mesh: token_mesh.clone().into(),
-                                material: materials.add(Color::srgb(0.97, 0.97, 0.97)),
+                                material: MeshMaterial2d(
+                                    materials.add(Color::srgb(0.97, 0.97, 0.97)),
+                                ),
                                 transform: Transform::from_scale(Vec3::splat(11.5)),
                                 ..default()
                             });
                             token_parent.spawn(MaterialMesh2dBundle {
                                 mesh: token_mesh.clone().into(),
-                                material: materials.add(color),
+                                material: MeshMaterial2d(materials.add(color)),
                                 transform: Transform::from_scale(Vec3::splat(8.4)),
                                 ..default()
                             });
                             token_parent.spawn(MaterialMesh2dBundle {
                                 mesh: token_mesh.clone().into(),
-                                material: materials.add(Color::srgba(1.0, 1.0, 1.0, 0.35)),
+                                material: MeshMaterial2d(
+                                    materials.add(Color::srgba(1.0, 1.0, 1.0, 0.35)),
+                                ),
                                 transform: Transform::from_xyz(-2.2, 2.1, 0.2)
                                     .with_scale(Vec3::splat(3.0)),
                                 ..default()
@@ -1057,7 +1046,7 @@ fn update_token_visual_state(
             1.0
         };
         let pulse = if is_selectable {
-            1.0 + (time.elapsed_seconds() * 8.0).sin().abs() * 0.1
+            1.0 + (time.elapsed_secs() * 8.0).sin().abs() * 0.1
         } else {
             1.0
         };
@@ -1094,7 +1083,9 @@ fn pointer_world_position(
     };
 
     let (camera, camera_transform) = camera_q.get_single().ok()?;
-    camera.viewport_to_world_2d(camera_transform, screen_position)
+    camera
+        .viewport_to_world_2d(camera_transform, screen_position)
+        .ok()
 }
 
 fn nearest_selectable_token(
@@ -1125,7 +1116,7 @@ fn animate_token_transforms(time: Res<Time>, mut query: Query<(&mut TokenVisual,
 
             let duration = (token.segment_start.distance(next_stop) / 210.0).max(0.08);
             token.segment_progress =
-                (token.segment_progress + time.delta_seconds() / duration).clamp(0.0, 1.0);
+                (token.segment_progress + time.delta_secs() / duration).clamp(0.0, 1.0);
 
             let mut position = token.segment_start.lerp(next_stop, token.segment_progress);
             position.y += (PI * token.segment_progress).sin() * 14.0;
@@ -1138,7 +1129,7 @@ fn animate_token_transforms(time: Res<Time>, mut query: Query<(&mut TokenVisual,
                 token.waypoints.pop_front();
             }
         } else {
-            let speed = (time.delta_seconds() * 9.0).clamp(0.0, 1.0);
+            let speed = (time.delta_secs() * 9.0).clamp(0.0, 1.0);
             transform.translation = transform.translation.lerp(token.target, speed);
             token.segment_start = transform.translation;
         }
@@ -1152,9 +1143,9 @@ fn animate_confetti(
 ) {
     for (entity, mut transform, mut sprite, mut confetti) in &mut query {
         confetti.timer.tick(time.delta());
-        confetti.velocity.y -= 520.0 * time.delta_seconds();
-        transform.translation += (confetti.velocity * time.delta_seconds()).extend(0.0);
-        transform.rotate_z(confetti.spin * time.delta_seconds());
+        confetti.velocity.y -= 520.0 * time.delta_secs();
+        transform.translation += (confetti.velocity * time.delta_secs()).extend(0.0);
+        transform.rotate_z(confetti.spin * time.delta_secs());
 
         let life = 1.0 - confetti.timer.fraction();
         sprite.color.set_alpha(life.clamp(0.0, 1.0));
@@ -1195,7 +1186,7 @@ fn update_status_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With
             .join(" > ")
     };
 
-    text.sections[0].value = format!(
+    text.0 = format!(
         "Now: {}\nTurn: {} ({})   Last roll: {}\nWinners: {}\nControls: Space/Tap DICE roll | 1-4 or Arrows pick | Enter/Tap move | Esc title",
         game.message,
         game.players[game.current].name,
@@ -1237,9 +1228,8 @@ fn update_dice_text(
             }
             dice_animation.spin_face = next;
         }
-        value_transform.rotation = Quat::from_rotation_z(time.elapsed_seconds() * 11.0);
-        value_transform.scale =
-            Vec3::splat(1.0 + (time.elapsed_seconds() * 12.0).sin().abs() * 0.16);
+        value_transform.rotation = Quat::from_rotation_z(time.elapsed_secs() * 11.0);
+        value_transform.scale = Vec3::splat(1.0 + (time.elapsed_secs() * 12.0).sin().abs() * 0.16);
 
         if dice_animation.timer.finished() {
             dice_animation.rolling = false;
@@ -1265,12 +1255,12 @@ fn update_dice_text(
         format!("{}'s turn", game.players[game.current].name)
     };
 
-    value_text.sections[0].value = if face == 0 {
+    value_text.0 = if face == 0 {
         "-".to_string()
     } else {
         face.to_string()
     };
-    sub_text.sections[0].value = sub_header;
+    sub_text.0 = sub_header;
 }
 
 fn token_position_for_state(
@@ -1593,10 +1583,8 @@ fn play_gameplay_music(mut commands: Commands, mut music: ResMut<GameplayMusic>)
     music.entity = Some(
         commands
             .spawn((
-                AudioBundle {
-                    source: music.handle.clone(),
-                    settings: PlaybackSettings::LOOP,
-                },
+                AudioPlayer::new(music.handle.clone()),
+                PlaybackSettings::LOOP,
                 Music,
             ))
             .id(),
@@ -1611,10 +1599,8 @@ fn stop_music(mut commands: Commands, mut music: ResMut<GameplayMusic>) {
 
 fn play_sfx(commands: &mut Commands, handle: Handle<AudioSource>) {
     commands.spawn((
-        AudioBundle {
-            source: handle,
-            settings: PlaybackSettings::DESPAWN,
-        },
+        AudioPlayer::new(handle),
+        PlaybackSettings::DESPAWN,
         SoundEffect,
     ));
 }
