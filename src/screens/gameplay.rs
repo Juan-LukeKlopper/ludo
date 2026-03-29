@@ -521,26 +521,32 @@ fn spawn_board(
                         .with_children(|token_parent| {
                             token_parent.spawn(MaterialMesh2dBundle {
                                 mesh: token_mesh.clone().into(),
-                                material: materials.add(Color::srgba(0.0, 0.0, 0.0, 0.3)),
+                                material: MeshMaterial2d(
+                                    materials.add(Color::srgba(0.0, 0.0, 0.0, 0.3)),
+                                ),
                                 transform: Transform::from_xyz(1.0, -2.5, -0.3)
                                     .with_scale(Vec3::splat(13.0)),
                                 ..default()
                             });
                             token_parent.spawn(MaterialMesh2dBundle {
                                 mesh: token_mesh.clone().into(),
-                                material: materials.add(Color::srgb(0.97, 0.97, 0.97)),
+                                material: MeshMaterial2d(
+                                    materials.add(Color::srgb(0.97, 0.97, 0.97)),
+                                ),
                                 transform: Transform::from_scale(Vec3::splat(11.5)),
                                 ..default()
                             });
                             token_parent.spawn(MaterialMesh2dBundle {
                                 mesh: token_mesh.clone().into(),
-                                material: materials.add(color),
+                                material: MeshMaterial2d(materials.add(color)),
                                 transform: Transform::from_scale(Vec3::splat(8.4)),
                                 ..default()
                             });
                             token_parent.spawn(MaterialMesh2dBundle {
                                 mesh: token_mesh.clone().into(),
-                                material: materials.add(Color::srgba(1.0, 1.0, 1.0, 0.35)),
+                                material: MeshMaterial2d(
+                                    materials.add(Color::srgba(1.0, 1.0, 1.0, 0.35)),
+                                ),
                                 transform: Transform::from_xyz(-2.2, 2.1, 0.2)
                                     .with_scale(Vec3::splat(3.0)),
                                 ..default()
@@ -1040,7 +1046,7 @@ fn update_token_visual_state(
             1.0
         };
         let pulse = if is_selectable {
-            1.0 + (time.elapsed_seconds() * 8.0).sin().abs() * 0.1
+            1.0 + (time.elapsed_secs() * 8.0).sin().abs() * 0.1
         } else {
             1.0
         };
@@ -1077,7 +1083,9 @@ fn pointer_world_position(
     };
 
     let (camera, camera_transform) = camera_q.get_single().ok()?;
-    camera.viewport_to_world_2d(camera_transform, screen_position)
+    camera
+        .viewport_to_world_2d(camera_transform, screen_position)
+        .ok()
 }
 
 fn nearest_selectable_token(
@@ -1108,7 +1116,7 @@ fn animate_token_transforms(time: Res<Time>, mut query: Query<(&mut TokenVisual,
 
             let duration = (token.segment_start.distance(next_stop) / 210.0).max(0.08);
             token.segment_progress =
-                (token.segment_progress + time.delta_seconds() / duration).clamp(0.0, 1.0);
+                (token.segment_progress + time.delta_secs() / duration).clamp(0.0, 1.0);
 
             let mut position = token.segment_start.lerp(next_stop, token.segment_progress);
             position.y += (PI * token.segment_progress).sin() * 14.0;
@@ -1121,7 +1129,7 @@ fn animate_token_transforms(time: Res<Time>, mut query: Query<(&mut TokenVisual,
                 token.waypoints.pop_front();
             }
         } else {
-            let speed = (time.delta_seconds() * 9.0).clamp(0.0, 1.0);
+            let speed = (time.delta_secs() * 9.0).clamp(0.0, 1.0);
             transform.translation = transform.translation.lerp(token.target, speed);
             token.segment_start = transform.translation;
         }
@@ -1135,9 +1143,9 @@ fn animate_confetti(
 ) {
     for (entity, mut transform, mut sprite, mut confetti) in &mut query {
         confetti.timer.tick(time.delta());
-        confetti.velocity.y -= 520.0 * time.delta_seconds();
-        transform.translation += (confetti.velocity * time.delta_seconds()).extend(0.0);
-        transform.rotate_z(confetti.spin * time.delta_seconds());
+        confetti.velocity.y -= 520.0 * time.delta_secs();
+        transform.translation += (confetti.velocity * time.delta_secs()).extend(0.0);
+        transform.rotate_z(confetti.spin * time.delta_secs());
 
         let life = 1.0 - confetti.timer.fraction();
         sprite.color.set_alpha(life.clamp(0.0, 1.0));
@@ -1220,9 +1228,8 @@ fn update_dice_text(
             }
             dice_animation.spin_face = next;
         }
-        value_transform.rotation = Quat::from_rotation_z(time.elapsed_seconds() * 11.0);
-        value_transform.scale =
-            Vec3::splat(1.0 + (time.elapsed_seconds() * 12.0).sin().abs() * 0.16);
+        value_transform.rotation = Quat::from_rotation_z(time.elapsed_secs() * 11.0);
+        value_transform.scale = Vec3::splat(1.0 + (time.elapsed_secs() * 12.0).sin().abs() * 0.16);
 
         if dice_animation.timer.finished() {
             dice_animation.rolling = false;
