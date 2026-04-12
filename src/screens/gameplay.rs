@@ -1155,10 +1155,7 @@ fn move_to_win_screen(
     next_screen.set(Screen::Win);
 }
 
-fn update_status_text(
-    game: Res<LudoGame>,
-    mut text_query: Query<&mut Text2d, With<StatusText>>,
-) {
+fn update_status_text(game: Res<LudoGame>, mut text_query: Query<&mut Text2d, With<StatusText>>) {
     let Ok(mut text) = text_query.single_mut() else {
         return;
     };
