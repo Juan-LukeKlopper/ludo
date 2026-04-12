@@ -1175,7 +1175,9 @@ fn move_to_win_screen(
 }
 
 fn update_status_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With<StatusText>>) {
-    let mut text = text_query.single_mut();
+    let Ok(mut text) = text_query.get_single_mut() else {
+        return;
+    };
     let ranking = if game.winner_order.is_empty() {
         "None".to_string()
     } else {
