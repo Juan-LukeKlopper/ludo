@@ -3,7 +3,7 @@
 //! for other characters as well.
 
 use bevy::{
-    ecs::{system::RunSystemOnce as _, world::Command},
+    ecs::system::RunSystemOnce as _,
     image::{ImageLoaderSettings, ImageSampler},
     prelude::*,
 };
@@ -42,7 +42,7 @@ pub struct SpawnPlayer {
 
 impl Command for SpawnPlayer {
     fn apply(self, world: &mut World) {
-        let _ = world.run_system_once_with(self, spawn_player);
+        let _ = world.run_system_once_with(spawn_player, self);
     }
 }
 

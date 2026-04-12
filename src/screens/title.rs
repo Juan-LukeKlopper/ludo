@@ -94,8 +94,8 @@ fn spawn_title_screen(mut commands: Commands) {
         .insert(StateScoped(Screen::Title))
         .with_children(|children| {
             children
-                .spawn(NodeBundle {
-                    node: Node {
+                .spawn((
+                    Node {
                         width: Percent(100.0),
                         height: Percent(100.0),
                         padding: UiRect::all(Px(18.0)),
@@ -103,9 +103,8 @@ fn spawn_title_screen(mut commands: Commands) {
                         row_gap: Px(12.0),
                         ..default()
                     },
-                    background_color: BackgroundColor(Color::srgba(0.04, 0.06, 0.11, 0.92)),
-                    ..default()
-                })
+                    BackgroundColor(Color::srgba(0.04, 0.06, 0.11, 0.92)),
+                ))
                 .with_children(|panel| {
                     panel.spawn((
                         Text::new("🎲 Ludo King V1"),
@@ -152,14 +151,11 @@ fn spawn_title_screen(mut commands: Commands) {
                     ));
 
                     panel
-                        .spawn(NodeBundle {
-                            node: Node {
-                                width: Percent(100.0),
-                                flex_wrap: FlexWrap::Wrap,
-                                column_gap: Px(8.0),
-                                row_gap: Px(8.0),
-                                ..default()
-                            },
+                        .spawn(Node {
+                            width: Percent(100.0),
+                            flex_wrap: FlexWrap::Wrap,
+                            column_gap: Px(8.0),
+                            row_gap: Px(8.0),
                             ..default()
                         })
                         .with_children(|row| {
@@ -168,35 +164,27 @@ fn spawn_title_screen(mut commands: Commands) {
                         });
 
                     panel
-                        .spawn(NodeBundle {
-                            node: Node {
-                                width: Percent(100.0),
-                                flex_wrap: FlexWrap::Wrap,
-                                column_gap: Px(10.0),
-                                row_gap: Px(10.0),
-                                ..default()
-                            },
+                        .spawn(Node {
+                            width: Percent(100.0),
+                            flex_wrap: FlexWrap::Wrap,
+                            column_gap: Px(10.0),
+                            row_gap: Px(10.0),
                             ..default()
                         })
                         .with_children(|seat_grid| {
                             for seat in 0..4 {
                                 seat_grid
                                     .spawn((
-                                        NodeBundle {
-                                            node: Node {
-                                                flex_grow: 1.0,
-                                                width: Percent(48.0),
-                                                min_width: Px(320.0),
-                                                flex_direction: FlexDirection::Column,
-                                                padding: UiRect::all(Px(10.0)),
-                                                row_gap: Px(8.0),
-                                                ..default()
-                                            },
-                                            background_color: BackgroundColor(Color::srgba(
-                                                0.16, 0.2, 0.4, 0.75,
-                                            )),
+                                        Node {
+                                            flex_grow: 1.0,
+                                            width: Percent(48.0),
+                                            min_width: Px(320.0),
+                                            flex_direction: FlexDirection::Column,
+                                            padding: UiRect::all(Px(10.0)),
+                                            row_gap: Px(8.0),
                                             ..default()
                                         },
+                                        BackgroundColor(Color::srgba(0.16, 0.2, 0.4, 0.75)),
                                         SeatPanel(seat),
                                     ))
                                     .with_children(|seat_panel| {
@@ -211,14 +199,11 @@ fn spawn_title_screen(mut commands: Commands) {
                                         ));
 
                                         seat_panel
-                                            .spawn(NodeBundle {
-                                                node: Node {
-                                                    width: Percent(100.0),
-                                                    flex_wrap: FlexWrap::Wrap,
-                                                    row_gap: Px(8.0),
-                                                    column_gap: Px(8.0),
-                                                    ..default()
-                                                },
+                                            .spawn(Node {
+                                                width: Percent(100.0),
+                                                flex_wrap: FlexWrap::Wrap,
+                                                row_gap: Px(8.0),
+                                                column_gap: Px(8.0),
                                                 ..default()
                                             })
                                             .with_children(|row| {
@@ -248,14 +233,11 @@ fn spawn_title_screen(mut commands: Commands) {
                         });
 
                     panel
-                        .spawn(NodeBundle {
-                            node: Node {
-                                width: Percent(100.0),
-                                flex_wrap: FlexWrap::Wrap,
-                                column_gap: Px(8.0),
-                                row_gap: Px(8.0),
-                                ..default()
-                            },
+                        .spawn(Node {
+                            width: Percent(100.0),
+                            flex_wrap: FlexWrap::Wrap,
+                            column_gap: Px(8.0),
+                            row_gap: Px(8.0),
                             ..default()
                         })
                         .with_children(|row| {
@@ -275,22 +257,20 @@ fn spawn_title_screen(mut commands: Commands) {
         });
 }
 
-fn action_btn(parent: &mut ChildBuilder, text: impl Into<String>, action: SeatAction) {
+fn action_btn(parent: &mut ChildSpawnerCommands, text: impl Into<String>, action: SeatAction) {
     parent
         .spawn((
-            ButtonBundle {
-                node: Node {
-                    flex_grow: 1.0,
-                    min_width: Px(190.0),
-                    min_height: Px(34.0),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    padding: UiRect::all(Px(8.0)),
-                    ..default()
-                },
-                background_color: BackgroundColor(NODE_BACKGROUND),
+            Button,
+            Node {
+                flex_grow: 1.0,
+                min_width: Px(190.0),
+                min_height: Px(34.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                padding: UiRect::all(Px(8.0)),
                 ..default()
             },
+            BackgroundColor(NODE_BACKGROUND),
             InteractionPalette {
                 none: NODE_BACKGROUND,
                 hovered: BUTTON_HOVERED_BACKGROUND,
@@ -490,5 +470,5 @@ fn handle_name_typing(
 
 #[cfg(not(target_family = "wasm"))]
 fn exit_app(_trigger: Trigger<OnPress>, mut app_exit: EventWriter<AppExit>) {
-    app_exit.send(AppExit::Success);
+    app_exit.write(AppExit::Success);
 }

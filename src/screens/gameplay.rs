@@ -2,7 +2,7 @@
 
 use bevy::{
     input::common_conditions::input_just_pressed, math::primitives::Circle, prelude::*,
-    sprite::MaterialMesh2dBundle, window::PrimaryWindow,
+    sprite::MeshMaterial2d, window::PrimaryWindow,
 };
 use rand::{seq::IteratorRandom, Rng};
 use std::{collections::VecDeque, f32::consts::PI};
@@ -382,89 +382,83 @@ fn spawn_board(
             GameplayBoard,
             Transform::default(),
             GlobalTransform::default(),
+            Visibility::default(),
         ))
         .with_children(|parent| {
-            parent.spawn(SpriteBundle {
-                sprite: Sprite {
+            parent.spawn((
+                Sprite {
                     color: palette.board_bg,
                     custom_size: Some(Vec2::splat(BOARD_WORLD_SIZE)),
                     ..default()
                 },
-                transform: Transform::from_xyz(0.0, 0.0, -20.0),
-                ..default()
-            });
+                Transform::from_xyz(0.0, 0.0, -20.0),
+            ));
 
             for (player, c) in PLAYER_COLORS.iter().enumerate() {
-                parent.spawn(SpriteBundle {
-                    sprite: Sprite {
+                parent.spawn((
+                    Sprite {
                         color: c.with_alpha(0.17),
                         custom_size: Some(Vec2::new(300.0, 300.0)),
                         ..default()
                     },
-                    transform: Transform::from_translation(yard_base(player).extend(-5.0)),
-                    ..default()
-                });
+                    Transform::from_translation(yard_base(player).extend(-5.0)),
+                ));
             }
 
-            parent.spawn(SpriteBundle {
-                sprite: Sprite {
+            parent.spawn((
+                Sprite {
                     color: palette.cross_bg,
                     custom_size: Some(Vec2::new(220.0, 560.0)),
                     ..default()
                 },
-                transform: Transform::from_xyz(0.0, 0.0, -8.0),
-                ..default()
-            });
-            parent.spawn(SpriteBundle {
-                sprite: Sprite {
+                Transform::from_xyz(0.0, 0.0, -8.0),
+            ));
+            parent.spawn((
+                Sprite {
                     color: palette.cross_bg,
                     custom_size: Some(Vec2::new(560.0, 220.0)),
                     ..default()
                 },
-                transform: Transform::from_xyz(0.0, 0.0, -8.0),
-                ..default()
-            });
+                Transform::from_xyz(0.0, 0.0, -8.0),
+            ));
 
             let points = track_points();
             for p in &points {
-                parent.spawn(SpriteBundle {
-                    sprite: Sprite {
+                parent.spawn((
+                    Sprite {
                         color: palette.track_cell,
                         custom_size: Some(Vec2::splat(26.0)),
                         ..default()
                     },
-                    transform: Transform::from_translation(*p),
-                    ..default()
-                });
+                    Transform::from_translation(*p),
+                ));
             }
 
             for safe_idx in safe_track_indices() {
-                parent.spawn(SpriteBundle {
-                    sprite: Sprite {
+                parent.spawn((
+                    Sprite {
                         color: palette.safe_cell,
                         custom_size: Some(Vec2::splat(14.0)),
                         ..default()
                     },
-                    transform: Transform::from_translation(
+                    Transform::from_translation(
                         points[safe_idx as usize] + Vec3::new(0.0, 0.0, 1.0),
                     ),
-                    ..default()
-                });
+                ));
             }
 
             for (player, player_color) in PLAYER_COLORS.iter().enumerate() {
                 for step in 0..6 {
-                    parent.spawn(SpriteBundle {
-                        sprite: Sprite {
+                    parent.spawn((
+                        Sprite {
                             color: player_color.with_alpha(0.34),
                             custom_size: Some(Vec2::splat(24.0)),
                             ..default()
                         },
-                        transform: Transform::from_translation(
+                        Transform::from_translation(
                             home_position(player, 50 + step) - Vec3::new(0.0, 0.0, 1.0),
                         ),
-                        ..default()
-                    });
+                    ));
                 }
             }
 
@@ -508,6 +502,7 @@ fn spawn_board(
                         .spawn((
                             Transform::from_translation(start),
                             GlobalTransform::default(),
+                            Visibility::default(),
                             TokenVisual {
                                 player,
                                 token,
@@ -519,58 +514,44 @@ fn spawn_board(
                             },
                         ))
                         .with_children(|token_parent| {
-                            token_parent.spawn(MaterialMesh2dBundle {
-                                mesh: token_mesh.clone().into(),
-                                material: MeshMaterial2d(
-                                    materials.add(Color::srgba(0.0, 0.0, 0.0, 0.3)),
-                                ),
-                                transform: Transform::from_xyz(1.0, -2.5, -0.3)
-                                    .with_scale(Vec3::splat(13.0)),
-                                ..default()
-                            });
-                            token_parent.spawn(MaterialMesh2dBundle {
-                                mesh: token_mesh.clone().into(),
-                                material: MeshMaterial2d(
-                                    materials.add(Color::srgb(0.97, 0.97, 0.97)),
-                                ),
-                                transform: Transform::from_scale(Vec3::splat(11.5)),
-                                ..default()
-                            });
-                            token_parent.spawn(MaterialMesh2dBundle {
-                                mesh: token_mesh.clone().into(),
-                                material: MeshMaterial2d(materials.add(color)),
-                                transform: Transform::from_scale(Vec3::splat(8.4)),
-                                ..default()
-                            });
-                            token_parent.spawn(MaterialMesh2dBundle {
-                                mesh: token_mesh.clone().into(),
-                                material: MeshMaterial2d(
-                                    materials.add(Color::srgba(1.0, 1.0, 1.0, 0.35)),
-                                ),
-                                transform: Transform::from_xyz(-2.2, 2.1, 0.2)
-                                    .with_scale(Vec3::splat(3.0)),
-                                ..default()
-                            });
-                            token_parent.spawn(SpriteBundle {
-                                sprite: Sprite {
+                            token_parent.spawn((
+                                Mesh2d(token_mesh.clone()),
+                                MeshMaterial2d(materials.add(Color::srgba(0.0, 0.0, 0.0, 0.3))),
+                                Transform::from_xyz(1.0, -2.5, -0.3).with_scale(Vec3::splat(13.0)),
+                            ));
+                            token_parent.spawn((
+                                Mesh2d(token_mesh.clone()),
+                                MeshMaterial2d(materials.add(Color::srgb(0.97, 0.97, 0.97))),
+                                Transform::from_scale(Vec3::splat(11.5)),
+                            ));
+                            token_parent.spawn((
+                                Mesh2d(token_mesh.clone()),
+                                MeshMaterial2d(materials.add(color)),
+                                Transform::from_scale(Vec3::splat(8.4)),
+                            ));
+                            token_parent.spawn((
+                                Mesh2d(token_mesh.clone()),
+                                MeshMaterial2d(materials.add(Color::srgba(1.0, 1.0, 1.0, 0.35))),
+                                Transform::from_xyz(-2.2, 2.1, 0.2).with_scale(Vec3::splat(3.0)),
+                            ));
+                            token_parent.spawn((
+                                Sprite {
                                     color: Color::srgb(0.96, 0.96, 0.96),
                                     custom_size: Some(Vec2::new(6.8, 6.8)),
                                     ..default()
                                 },
-                                transform: Transform::from_xyz(0.0, -8.8, 0.15)
+                                Transform::from_xyz(0.0, -8.8, 0.15)
                                     .with_rotation(Quat::from_rotation_z(45_f32.to_radians())),
-                                ..default()
-                            });
-                            token_parent.spawn(SpriteBundle {
-                                sprite: Sprite {
+                            ));
+                            token_parent.spawn((
+                                Sprite {
                                     color,
                                     custom_size: Some(Vec2::new(3.8, 3.8)),
                                     ..default()
                                 },
-                                transform: Transform::from_xyz(0.0, -8.2, 0.18)
+                                Transform::from_xyz(0.0, -8.2, 0.18)
                                     .with_rotation(Quat::from_rotation_z(45_f32.to_radians())),
-                                ..default()
-                            });
+                            ));
                         });
                 }
             }
@@ -581,7 +562,7 @@ fn fit_gameplay_board_to_window(
     window_q: Query<&Window, With<PrimaryWindow>>,
     mut board_q: Query<&mut Transform, With<GameplayBoard>>,
 ) {
-    let Ok(window) = window_q.get_single() else {
+    let Ok(window) = window_q.single() else {
         return;
     };
     let scale_from_width = window.width() * 0.98 / BOARD_WORLD_SIZE;
@@ -1075,14 +1056,14 @@ fn pointer_world_position(
     camera_q: &Query<(&Camera, &GlobalTransform), With<Camera2d>>,
     touches: &Touches,
 ) -> Option<Vec2> {
-    let window = window_q.get_single().ok()?;
+    let window = window_q.single().ok()?;
     let screen_position = if let Some(touch) = touches.iter_just_pressed().next() {
         touch.position()
     } else {
         window.cursor_position()?
     };
 
-    let (camera, camera_transform) = camera_q.get_single().ok()?;
+    let (camera, camera_transform) = camera_q.single().ok()?;
     camera
         .viewport_to_world_2d(camera_transform, screen_position)
         .ok()
@@ -1151,7 +1132,7 @@ fn animate_confetti(
         sprite.color.set_alpha(life.clamp(0.0, 1.0));
 
         if confetti.timer.finished() {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).despawn();
         }
     }
 }
@@ -1174,8 +1155,11 @@ fn move_to_win_screen(
     next_screen.set(Screen::Win);
 }
 
-fn update_status_text(game: Res<LudoGame>, mut text_query: Query<&mut Text, With<StatusText>>) {
-    let Ok(mut text) = text_query.get_single_mut() else {
+fn update_status_text(
+    game: Res<LudoGame>,
+    mut text_query: Query<&mut Text2d, With<StatusText>>,
+) {
+    let Ok(mut text) = text_query.single_mut() else {
         return;
     };
     let ranking = if game.winner_order.is_empty() {
@@ -1207,15 +1191,15 @@ fn update_dice_text(
     game: Res<LudoGame>,
     mut dice_animation: ResMut<DiceAnimation>,
     mut value_query: Query<
-        (&mut Text, &mut Transform),
+        (&mut Text2d, &mut Transform),
         (With<DiceValueText>, Without<DiceSubText>),
     >,
-    mut sub_query: Query<&mut Text, (With<DiceSubText>, Without<DiceValueText>)>,
+    mut sub_query: Query<&mut Text2d, (With<DiceSubText>, Without<DiceValueText>)>,
 ) {
-    let Ok((mut value_text, mut value_transform)) = value_query.get_single_mut() else {
+    let Ok((mut value_text, mut value_transform)) = value_query.single_mut() else {
         return;
     };
-    let Ok(mut sub_text) = sub_query.get_single_mut() else {
+    let Ok(mut sub_text) = sub_query.single_mut() else {
         return;
     };
 
@@ -1326,15 +1310,12 @@ fn spawn_confetti(commands: &mut Commands) {
         let size = rng.gen_range(5.0..10.0);
         commands.spawn((
             StateScoped(Screen::Gameplay),
-            SpriteBundle {
-                sprite: Sprite {
-                    color,
-                    custom_size: Some(Vec2::splat(size)),
-                    ..default()
-                },
-                transform: Transform::from_xyz(0.0, 0.0, 60.0),
+            Sprite {
+                color,
+                custom_size: Some(Vec2::splat(size)),
                 ..default()
             },
+            Transform::from_xyz(0.0, 0.0, 60.0),
             ConfettiPiece {
                 velocity,
                 spin: rng.gen_range(-8.0..8.0),
@@ -1595,7 +1576,7 @@ fn play_gameplay_music(mut commands: Commands, mut music: ResMut<GameplayMusic>)
 
 fn stop_music(mut commands: Commands, mut music: ResMut<GameplayMusic>) {
     if let Some(entity) = music.entity.take() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 

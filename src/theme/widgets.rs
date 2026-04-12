@@ -20,17 +20,15 @@ impl Widgets for Commands<'_, '_> {
     fn button(&mut self, text: impl Into<String>) -> EntityCommands<'_> {
         let mut entity = self.spawn((
             Name::new("Button"),
-            ButtonBundle {
-                node: Node {
-                    width: Px(200.0),
-                    height: Px(65.0),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                background_color: BackgroundColor(NODE_BACKGROUND),
+            Button,
+            Node {
+                width: Px(200.0),
+                height: Px(65.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
                 ..default()
             },
+            BackgroundColor(NODE_BACKGROUND),
             InteractionPalette {
                 none: NODE_BACKGROUND,
                 hovered: BUTTON_HOVERED_BACKGROUND,
@@ -55,17 +53,14 @@ impl Widgets for Commands<'_, '_> {
     fn header(&mut self, text: impl Into<String>) -> EntityCommands<'_> {
         let mut entity = self.spawn((
             Name::new("Header"),
-            NodeBundle {
-                node: Node {
-                    width: Px(500.0),
-                    height: Px(65.0),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                background_color: BackgroundColor(NODE_BACKGROUND),
+            Node {
+                width: Px(500.0),
+                height: Px(65.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
                 ..default()
             },
+            BackgroundColor(NODE_BACKGROUND),
         ));
         entity.with_children(|children| {
             children.spawn((
@@ -99,21 +94,19 @@ impl Widgets for Commands<'_, '_> {
     }
 }
 
-impl Widgets for ChildBuilder<'_> {
+impl Widgets for ChildSpawnerCommands<'_> {
     fn button(&mut self, text: impl Into<String>) -> EntityCommands<'_> {
         let mut entity = self.spawn((
             Name::new("Button"),
-            ButtonBundle {
-                node: Node {
-                    width: Px(200.0),
-                    height: Px(65.0),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                background_color: BackgroundColor(NODE_BACKGROUND),
+            Button,
+            Node {
+                width: Px(200.0),
+                height: Px(65.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
                 ..default()
             },
+            BackgroundColor(NODE_BACKGROUND),
             InteractionPalette {
                 none: NODE_BACKGROUND,
                 hovered: BUTTON_HOVERED_BACKGROUND,
@@ -138,17 +131,14 @@ impl Widgets for ChildBuilder<'_> {
     fn header(&mut self, text: impl Into<String>) -> EntityCommands<'_> {
         let mut entity = self.spawn((
             Name::new("Header"),
-            NodeBundle {
-                node: Node {
-                    width: Px(500.0),
-                    height: Px(65.0),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                background_color: BackgroundColor(NODE_BACKGROUND),
+            Node {
+                width: Px(500.0),
+                height: Px(65.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
                 ..default()
             },
+            BackgroundColor(NODE_BACKGROUND),
         ));
         entity.with_children(|children| {
             children.spawn((
@@ -193,17 +183,14 @@ impl Containers for Commands<'_, '_> {
     fn ui_root(&mut self) -> EntityCommands<'_> {
         self.spawn((
             Name::new("UI Root"),
-            NodeBundle {
-                node: Node {
-                    width: Percent(100.0),
-                    height: Percent(100.0),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    flex_direction: FlexDirection::Column,
-                    row_gap: Px(10.0),
-                    position_type: PositionType::Absolute,
-                    ..default()
-                },
+            Node {
+                width: Percent(100.0),
+                height: Percent(100.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
+                row_gap: Px(10.0),
+                position_type: PositionType::Absolute,
                 ..default()
             },
         ))
