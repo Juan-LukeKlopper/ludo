@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 mod asset_tracking;
 pub mod audio;
 mod demo;
@@ -48,7 +50,7 @@ impl Plugin for AppPlugin {
                 })
                 .set(AudioPlugin {
                     global_volume: GlobalVolume {
-                        volume: Volume::new(0.3),
+                        volume: Volume::Linear(0.3),
                     },
                     ..default()
                 }),
@@ -84,7 +86,7 @@ enum AppSet {
 fn spawn_camera(mut commands: Commands) {
     commands.spawn((
         Name::new("Camera"),
-        Camera2dBundle::default(),
+        Camera2d,
         // Render all UI to this camera.
         // Not strictly necessary since we only use one camera,
         // but if we don't use this component, our UI will disappear as soon

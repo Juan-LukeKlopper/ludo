@@ -14,7 +14,9 @@ pub(super) fn plugin(app: &mut App) {
 
     app.add_systems(
         Update,
-        continue_to_title_screen.run_if(in_state(Screen::Loading).and_then(all_assets_loaded)),
+        continue_to_title_screen
+            .run_if(in_state(Screen::Loading))
+            .run_if(all_assets_loaded),
     );
 }
 
@@ -23,7 +25,7 @@ fn spawn_loading_screen(mut commands: Commands) {
         .ui_root()
         .insert(StateScoped(Screen::Loading))
         .with_children(|children| {
-            children.label("Loading...").insert(Style {
+            children.label("Loading...").insert(Node {
                 justify_content: JustifyContent::Center,
                 ..default()
             });

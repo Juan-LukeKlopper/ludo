@@ -56,10 +56,8 @@ fn play_credits_music(mut commands: Commands, mut music: ResMut<CreditsMusic>) {
     music.entity = Some(
         commands
             .spawn((
-                AudioBundle {
-                    source: music.music.clone(),
-                    settings: PlaybackSettings::LOOP,
-                },
+                AudioPlayer::new(music.music.clone()),
+                PlaybackSettings::LOOP,
                 Music,
             ))
             .id(),
@@ -68,6 +66,6 @@ fn play_credits_music(mut commands: Commands, mut music: ResMut<CreditsMusic>) {
 
 fn stop_music(mut commands: Commands, mut music: ResMut<CreditsMusic>) {
     if let Some(entity) = music.entity.take() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }

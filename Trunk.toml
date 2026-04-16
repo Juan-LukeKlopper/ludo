@@ -5,6 +5,9 @@ target = "web/index.html"
 dist = "target/trunk"
 # This is needed in order to host the game on itch.io.
 public_url = "./"
+# Use the shared dev feature set without native-only file watchers.
+no_default_features = true
+features = ["dev"]
 
 [serve]
 # Required in order to receive 404s for missing assets, which is what Bevy expects.

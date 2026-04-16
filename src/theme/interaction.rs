@@ -94,10 +94,8 @@ fn trigger_interaction_sound_effect(
             _ => continue,
         };
         commands.spawn((
-            AudioBundle {
-                source,
-                settings: PlaybackSettings::DESPAWN,
-            },
+            AudioPlayer::new(source),
+            PlaybackSettings::DESPAWN,
             SoundEffect,
         ));
     }
