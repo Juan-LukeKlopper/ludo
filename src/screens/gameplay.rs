@@ -2,7 +2,7 @@
 
 use bevy::{
     input::common_conditions::input_just_pressed, math::primitives::Circle, prelude::*,
-    sprite::MeshMaterial2d, window::PrimaryWindow,
+    sprite::Text2d, window::PrimaryWindow,
 };
 use rand::{seq::IteratorRandom, Rng};
 use std::{collections::VecDeque, f32::consts::PI};
@@ -158,7 +158,7 @@ impl BotStrategy {
         *BotStrategy::ALL
             .iter()
             .skip(1)
-            .choose(&mut rand::thread_rng())
+            .choose(&mut rand::rng())
             .unwrap_or(&BotStrategy::Racer)
     }
 }
@@ -378,7 +378,7 @@ fn spawn_board(
     commands
         .spawn((
             Name::new("GameplayRoot"),
-            StateScoped(Screen::Gameplay),
+            DespawnOnExit(Screen::Gameplay),
             GameplayBoard,
             Transform::default(),
             GlobalTransform::default(),
@@ -729,7 +729,7 @@ fn run_bot_turn(
     }
 
     game.bot_timer.tick(time.delta());
-    if !game.bot_timer.finished() {
+    if !game.bot_timer.is_finished() {
         return;
     }
 
@@ -798,12 +798,12 @@ fn score_move(
         BotStrategy::SoloRunner => {
             progress_bonus + if is_furthest { 120 } else { -50 } + in_home_lane * 35
         }
-        BotStrategy::Random => rand::thread_rng().gen_range(0..100),
+        BotStrategy::Random => rand::rng().random_range(0..100),
     }
 }
 
 fn roll_for_current_player(game: &mut LudoGame) -> u8 {
-    let roll = rand::thread_rng().gen_range(1..=6);
+    let roll = rand::rng().random_range(1..=6);
     game.last_roll = Some(roll);
 
     if roll == 6 {
@@ -856,7 +856,7 @@ fn roll_for_current_player(game: &mut LudoGame) -> u8 {
 fn start_dice_roll_animation(dice_animation: &mut DiceAnimation, roll: u8) {
     dice_animation.rolling = true;
     dice_animation.last_face = Some(roll);
-    dice_animation.spin_face = rand::thread_rng().gen_range(1..=6);
+    dice_animation.spin_face = rand::rng().random_range(1..=6);
     dice_animation.timer.reset();
     dice_animation.spin_tick.reset();
 }
@@ -1131,7 +1131,7 @@ fn animate_confetti(
         let life = 1.0 - confetti.timer.fraction();
         sprite.color.set_alpha(life.clamp(0.0, 1.0));
 
-        if confetti.timer.finished() {
+        if confetti.timer.is_finished() {
             commands.entity(entity).despawn();
         }
     }
@@ -1152,7 +1152,7 @@ fn move_to_win_screen(
         .iter()
         .map(|idx| game.players[*idx].name.clone())
         .collect();
-    next_screen.set(Screen::Win);
+    next_screen.as_mut().set_if_neq(Screen::Win);
 }
 
 fn update_status_text(game: Res<LudoGame>, mut text_query: Query<&mut Text2d, With<StatusText>>) {
@@ -1204,8 +1204,8 @@ fn update_dice_text(
         dice_animation.timer.tick(time.delta());
         dice_animation.spin_tick.tick(time.delta());
         if dice_animation.spin_tick.just_finished() {
-            let mut rng = rand::thread_rng();
-            let mut next = rng.gen_range(1..=6);
+            let mut rng = rand::rng();
+            let mut next = rng.random_range(1..=6);
             if next == dice_animation.spin_face {
                 next = (next % 6) + 1;
             }
@@ -1214,7 +1214,7 @@ fn update_dice_text(
         value_transform.rotation = Quat::from_rotation_z(time.elapsed_secs() * 11.0);
         value_transform.scale = Vec3::splat(1.0 + (time.elapsed_secs() * 12.0).sin().abs() * 0.16);
 
-        if dice_animation.timer.finished() {
+        if dice_animation.timer.is_finished() {
             dice_animation.rolling = false;
             value_transform.rotation = Quat::IDENTITY;
             value_transform.scale = Vec3::ONE;
@@ -1291,7 +1291,7 @@ fn movement_waypoints(
 }
 
 fn spawn_confetti(commands: &mut Commands) {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let confetti_colors = [
         Color::srgb(0.98, 0.2, 0.2),
         Color::srgb(0.2, 0.9, 0.3),
@@ -1302,11 +1302,14 @@ fn spawn_confetti(commands: &mut Commands) {
     ];
 
     for _ in 0..70 {
-        let color = confetti_colors[rng.gen_range(0..confetti_colors.len())];
-        let velocity = Vec2::new(rng.gen_range(-260.0..260.0), rng.gen_range(130.0..420.0));
-        let size = rng.gen_range(5.0..10.0);
+        let color = confetti_colors[rng.random_range(0..confetti_colors.len())];
+        let velocity = Vec2::new(
+            rng.random_range(-260.0..260.0),
+            rng.random_range(130.0..420.0),
+        );
+        let size = rng.random_range(5.0..10.0);
         commands.spawn((
-            StateScoped(Screen::Gameplay),
+            DespawnOnExit(Screen::Gameplay),
             Sprite {
                 color,
                 custom_size: Some(Vec2::splat(size)),
@@ -1315,8 +1318,8 @@ fn spawn_confetti(commands: &mut Commands) {
             Transform::from_xyz(0.0, 0.0, 60.0),
             ConfettiPiece {
                 velocity,
-                spin: rng.gen_range(-8.0..8.0),
-                timer: Timer::from_seconds(rng.gen_range(0.8..1.6), TimerMode::Once),
+                spin: rng.random_range(-8.0..8.0),
+                timer: Timer::from_seconds(rng.random_range(0.8..1.6), TimerMode::Once),
             },
         ));
     }
@@ -1586,13 +1589,13 @@ fn play_sfx(commands: &mut Commands, handle: Handle<AudioSource>) {
 }
 
 fn return_to_title_screen(mut next_screen: ResMut<NextState<Screen>>) {
-    next_screen.set(Screen::Title);
+    next_screen.as_mut().set_if_neq(Screen::Title);
 }
 
 pub fn random_name() -> String {
     PLAYER_NAMES
         .iter()
-        .choose(&mut rand::thread_rng())
+        .choose(&mut rand::rng())
         .unwrap_or(&"Player")
         .to_string()
 }
