@@ -15,7 +15,7 @@ pub(super) fn plugin(app: &mut App) {
 fn spawn_credits_screen(mut commands: Commands) {
     commands
         .ui_root()
-        .insert(StateScoped(Screen::Credits))
+        .insert(DespawnOnExit(Screen::Credits))
         .with_children(|children| {
             children.header("Made by");
             children.label("Joe Shmoe - Implemented aligator wrestling AI");
@@ -31,8 +31,8 @@ fn spawn_credits_screen(mut commands: Commands) {
         });
 }
 
-fn enter_title_screen(_trigger: Trigger<OnPress>, mut next_screen: ResMut<NextState<Screen>>) {
-    next_screen.set(Screen::Title);
+fn enter_title_screen(_trigger: On<UiPress>, mut next_screen: ResMut<NextState<Screen>>) {
+    next_screen.as_mut().set_if_neq(Screen::Title);
 }
 
 #[derive(Resource, Asset, Reflect, Clone)]
