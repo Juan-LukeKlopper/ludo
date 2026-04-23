@@ -14,7 +14,7 @@ pub(super) fn plugin(app: &mut App) {
 fn spawn_win_screen(mut commands: Commands, result: Res<LastMatchResult>) {
     commands
         .ui_root()
-        .insert(StateScoped(Screen::Win))
+        .insert(DespawnOnExit(Screen::Win))
         .with_children(|children| {
             children.header("🏆 Match Over");
             if result.ranking.is_empty() {
@@ -28,6 +28,6 @@ fn spawn_win_screen(mut commands: Commands, result: Res<LastMatchResult>) {
         });
 }
 
-fn back_to_title(_trigger: Trigger<OnPress>, mut next_screen: ResMut<NextState<Screen>>) {
-    next_screen.set(Screen::Title);
+fn back_to_title(_trigger: On<UiPress>, mut next_screen: ResMut<NextState<Screen>>) {
+    next_screen.as_mut().set_if_neq(Screen::Title);
 }
