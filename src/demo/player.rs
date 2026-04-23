@@ -19,7 +19,6 @@ use crate::{
 };
 
 pub(super) fn plugin(app: &mut App) {
-    app.register_type::<Player>();
     app.load_resource::<PlayerAssets>();
 
     // Record directional input as movement controls.
@@ -78,7 +77,7 @@ fn spawn_player(
         },
         ScreenWrap,
         player_animation,
-        StateScoped(Screen::Gameplay),
+        DespawnOnExit(Screen::Gameplay),
     ));
 }
 

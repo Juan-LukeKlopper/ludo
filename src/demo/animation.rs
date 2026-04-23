@@ -5,7 +5,7 @@
 //! - [Timers](https://github.com/bevyengine/bevy/blob/latest/examples/time/timers.rs)
 
 use bevy::prelude::*;
-use rand::prelude::*;
+use rand::prelude::IndexedRandom;
 use std::time::Duration;
 
 use crate::{
@@ -16,7 +16,6 @@ use crate::{
 
 pub(super) fn plugin(app: &mut App) {
     // Animate and play sound effects based on controls.
-    app.register_type::<PlayerAnimation>();
     app.add_systems(
         Update,
         (
@@ -82,7 +81,7 @@ fn trigger_step_sound_effect(
             && animation.changed()
             && (animation.frame == 2 || animation.frame == 5)
         {
-            let rng = &mut rand::thread_rng();
+            let rng = &mut rand::rng();
             let random_step = player_assets.steps.choose(rng).unwrap();
             commands.spawn((
                 AudioPlayer::new(random_step.clone()),
@@ -142,7 +141,7 @@ impl PlayerAnimation {
     /// Update animation timers.
     pub fn update_timer(&mut self, delta: Duration) {
         self.timer.tick(delta);
-        if !self.timer.finished() {
+        if !self.timer.is_finished() {
             return;
         }
         self.frame = (self.frame + 1)
@@ -164,7 +163,7 @@ impl PlayerAnimation {
 
     /// Whether animation changed this tick.
     pub fn changed(&self) -> bool {
-        self.timer.finished()
+        self.timer.is_finished()
     }
 
     /// Return sprite index in the atlas.

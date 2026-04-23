@@ -24,7 +24,6 @@ pub(super) fn plugin(app: &mut App) {
     );
 
     // Add splash timer.
-    app.register_type::<SplashTimer>();
     app.add_systems(OnEnter(Screen::Splash), insert_splash_timer);
     app.add_systems(OnExit(Screen::Splash), remove_splash_timer);
     app.add_systems(
@@ -55,7 +54,7 @@ fn spawn_splash_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
         .insert((
             Name::new("Splash screen"),
             BackgroundColor(SPLASH_BACKGROUND_COLOR),
-            StateScoped(Screen::Splash),
+            DespawnOnExit(Screen::Splash),
         ))
         .with_children(|children| {
             children.spawn((
@@ -142,10 +141,10 @@ fn tick_splash_timer(time: Res<Time>, mut timer: ResMut<SplashTimer>) {
 
 fn check_splash_timer(timer: ResMut<SplashTimer>, mut next_screen: ResMut<NextState<Screen>>) {
     if timer.0.just_finished() {
-        next_screen.set(Screen::Loading);
+        next_screen.as_mut().set_if_neq(Screen::Loading);
     }
 }
 
 fn continue_to_loading_screen(mut next_screen: ResMut<NextState<Screen>>) {
-    next_screen.set(Screen::Loading);
+    next_screen.as_mut().set_if_neq(Screen::Loading);
 }

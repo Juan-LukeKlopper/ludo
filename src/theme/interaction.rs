@@ -3,7 +3,6 @@ use bevy::prelude::*;
 use crate::{asset_tracking::LoadResource, audio::SoundEffect};
 
 pub(super) fn plugin(app: &mut App) {
-    app.register_type::<InteractionPalette>();
     app.load_resource::<InteractionAssets>();
     app.add_systems(
         Update,
@@ -27,10 +26,12 @@ pub struct InteractionPalette {
     pub pressed: Color,
 }
 
-/// Event triggered on a UI entity when the [`Interaction`] component on the same entity changes to
-/// [`Interaction::Pressed`]. Observe this event to detect e.g. button presses.
-#[derive(Event)]
-pub struct OnPress;
+/// Observer event triggered on a UI entity when the [`Interaction`] component on the same entity
+/// changes to [`Interaction::Pressed`]. Observe this event to detect e.g. button presses.
+#[derive(EntityEvent)]
+pub struct UiPress {
+    pub entity: Entity,
+}
 
 fn trigger_on_press(
     interaction_query: Query<(Entity, &Interaction), Changed<Interaction>>,
@@ -38,7 +39,7 @@ fn trigger_on_press(
 ) {
     for (entity, interaction) in &interaction_query {
         if matches!(interaction, Interaction::Pressed) {
-            commands.trigger_targets(OnPress, entity);
+            commands.trigger(UiPress { entity });
         }
     }
 }

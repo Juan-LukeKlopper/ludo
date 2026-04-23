@@ -6,8 +6,9 @@ edition = "2021"
 rust-version = "1.92"
 
 [dependencies]
-bevy = { version = "0.16", features = ["bevy_ui_debug"] }
-rand = "0.8.5"
+bevy = { version = "0.18", features = ["bevy_ui_debug"] }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+rand = "0.9"
 # Compile low-severity logs out of native builds for performance.
 log = { version = "0.4.22", features = [
     "max_level_debug",
