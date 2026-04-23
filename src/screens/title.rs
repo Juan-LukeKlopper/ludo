@@ -91,7 +91,7 @@ fn reset_name_edit(mut name_edit: ResMut<NameEditState>) {
 fn spawn_title_screen(mut commands: Commands) {
     commands
         .ui_root()
-        .insert(StateScoped(Screen::Title))
+        .insert(DespawnOnExit(Screen::Title))
         .with_children(|children| {
             children
                 .spawn((
@@ -423,15 +423,15 @@ fn handle_action_buttons(
                         };
                     }
                 }
-                next_screen.set(Screen::Gameplay)
+                next_screen.as_mut().set_if_neq(Screen::Gameplay);
             }
-            SeatAction::Credits => next_screen.set(Screen::Credits),
+            SeatAction::Credits => next_screen.as_mut().set_if_neq(Screen::Credits),
         }
     }
 }
 
 fn handle_name_typing(
-    mut keyboard_events: EventReader<KeyboardInput>,
+    mut keyboard_events: MessageReader<KeyboardInput>,
     keys: Res<ButtonInput<KeyCode>>,
     mut setup: ResMut<MatchSetup>,
     name_edit: Res<NameEditState>,
@@ -469,6 +469,6 @@ fn handle_name_typing(
 }
 
 #[cfg(not(target_family = "wasm"))]
-fn exit_app(_trigger: Trigger<OnPress>, mut app_exit: EventWriter<AppExit>) {
+fn exit_app(_trigger: On<UiPress>, mut app_exit: MessageWriter<AppExit>) {
     app_exit.write(AppExit::Success);
 }
