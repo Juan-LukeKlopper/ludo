@@ -18,8 +18,6 @@ use bevy::{prelude::*, window::PrimaryWindow};
 use crate::AppSet;
 
 pub(super) fn plugin(app: &mut App) {
-    app.register_type::<(MovementController, ScreenWrap)>();
-
     app.add_systems(
         Update,
         (apply_movement, apply_screen_wrap)
