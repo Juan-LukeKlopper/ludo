@@ -23,7 +23,7 @@ pub(super) fn plugin(app: &mut App) {
 fn spawn_loading_screen(mut commands: Commands) {
     commands
         .ui_root()
-        .insert(StateScoped(Screen::Loading))
+        .insert(DespawnOnExit(Screen::Loading))
         .with_children(|children| {
             children.label("Loading...").insert(Node {
                 justify_content: JustifyContent::Center,
@@ -33,7 +33,7 @@ fn spawn_loading_screen(mut commands: Commands) {
 }
 
 fn continue_to_title_screen(mut next_screen: ResMut<NextState<Screen>>) {
-    next_screen.set(Screen::Title);
+    next_screen.as_mut().set_if_neq(Screen::Title);
 }
 
 fn all_assets_loaded(
